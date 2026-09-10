@@ -24,7 +24,7 @@ test('landing publishes a fetchable large social preview', async ({ page }) => {
   expect(image.status()).toBe(200)
   expect(image.headers()['content-type']).toBe('image/png')
   expect((await image.body()).byteLength).toBeGreaterThan(100_000)
-  await page.getByRole('banner').getByRole('link', { name: 'Help' }).click()
+  await page.getByRole('banner').getByRole('link', { name: 'How it works' }).click()
   await expect(page.getByRole('heading', { name: 'How this works' })).toBeVisible()
   await expect(page.getByText(/a university research group that tracks public posting volume/)).toBeVisible()
 })

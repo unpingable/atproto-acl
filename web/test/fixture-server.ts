@@ -11,6 +11,11 @@ import { ServiceControls } from '../src/controls.js'
 import { READ_OAUTH_SCOPE, WRITE_OAUTH_SCOPE } from '../src/oauth.js'
 import { acquisition, FakeAccounts, observations } from './fixtures.js'
 
+const now = Date.now()
+const observedAt = new Date(now - 60 * 60 * 1000).toISOString()
+const expiresAt = new Date(now + 24 * 60 * 60 * 1000).toISOString()
+const snapshotAt = new Date(now - 24 * 60 * 60 * 1000).toISOString()
+
 const dir = mkdtempSync(join(tmpdir(), 'acl-browser-'))
 const config = loadConfig({
   ATPROTO_ACL_ORIGIN: 'http://127.0.0.1:18426', ATPROTO_ACL_PORT: '18426',
@@ -50,19 +55,19 @@ const guidedAcquisition = (did: string, body: string) => {
     subject_handle: accounts.remote.get(did)!.get(subject)?.handle,
     post_uri: `at://${subject}/app.bsky.feed.post/fixture-${surface}-${position}`,
     post_cid: `cid-${surface}-${position}`, path: 'post.author', position,
-    acquired_at: '2026-09-08T12:00:00Z',
+    acquired_at: observedAt,
   }))
   return {
     subjects,
     identities: { [did]: did },
     observations: subjects.flatMap(subject => subject.endsWith('alice') ? [{
       provider, subject, property: 'monthly-posts-over-twenty-per-day', value: true,
-      observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z',
+      observed_at: observedAt, expires_at: expiresAt,
     }] : subject.endsWith('bob') ? [
-      { provider, subject, property: 'made-over-thirty-posts-yesterday', value: true, observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z' },
-      { provider, subject, property: 'made-over-thirty-replies-yesterday', value: true, observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z' },
+      { provider, subject, property: 'made-over-thirty-posts-yesterday', value: true, observed_at: observedAt, expires_at: expiresAt },
+      { provider, subject, property: 'made-over-thirty-replies-yesterday', value: true, observed_at: observedAt, expires_at: expiresAt },
     ] : []),
-    coverage: subjects.map(subject => ({ provider, subject, complete: true, checked_at: '2026-09-08T12:01:00Z' })),
+    coverage: subjects.map(subject => ({ provider, subject, complete: true, checked_at: observedAt })),
     discovery: body.includes('type: feed_exposure') ? [
       { source: 'feed_exposure', type: 'feed_exposure', surface: 'timeline', complete: true,
         exposure_complete: true, items_sampled: subjects.length, subjects, exposures: exposures('timeline') },
@@ -86,13 +91,13 @@ const bsky38Acquisition = () => {
     subjects: members.map(item => item.did), identities: {},
     observations: members.map(item => ({
       provider, subject: item.did, property: 'member', value: true,
-      observed_at: '2026-09-09T14:00:00Z', expires_at: '2026-09-10T14:00:00Z',
+      observed_at: snapshotAt, expires_at: expiresAt,
       evidence_id: `fixture-bsky38-${item.did}`, raw_json: JSON.stringify(item),
-      retrieved_at: '2026-09-09T14:00:00Z', provenance: 'https://bsky38.com/',
+      retrieved_at: snapshotAt, provenance: 'https://bsky38.com/',
     })),
-    coverage: members.map(item => ({ provider, subject: item.did, complete: true, checked_at: '2026-09-09T14:00:00Z' })),
+    coverage: members.map(item => ({ provider, subject: item.did, complete: true, checked_at: snapshotAt })),
     discovery: [{ source: 'external_snapshot', source_url: 'https://bsky38.com/',
-      retrieved_at: '2026-09-09T14:00:00Z', subjects: members.map(item => item.did), members, complete: true }],
+      retrieved_at: snapshotAt, subjects: members.map(item => item.did), members, complete: true }],
     remote: Object.fromEntries(members.map(item => [item.did, {
       known: true, direct: false, muted: false, handle: item.handle, display_name: item.displayName,
     }])),
