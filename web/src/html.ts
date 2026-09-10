@@ -313,6 +313,8 @@ export function policyImportReviewPage(account: { handle: string; did: string },
   draft: Record<string, unknown>) {
   const diff = JSON.parse(String(draft.diff)) as any
   const created = draft.target_policy_id ? 'replace this policy' : 'create a new policy'
+  const removedRules = Object.fromEntries(Object.entries(diff.account_rule_changes as Record<string, any>)
+    .filter(([, change]) => change.removed.length).map(([kind, change]) => [kind, change.removed]))
   return page('Review policy import', `<nav><a href="${draft.target_policy_id ? `/policies/${h(draft.target_policy_id)}` : '/app'}">← Cancel import</a></nav>
 <section class="title"><div><p class="eyebrow">Validated portable policy</p><h1>Review before you ${h(created)}</h1>
 <p><strong>${diff.policy_changed ? 'Policy settings will change.' : 'Policy settings are unchanged.'}</strong>
@@ -320,7 +322,7 @@ export function policyImportReviewPage(account: { handle: string; did: string },
 <section class="panel"><h2>Policy</h2><p>${diff.policy_changed ? `The evaluator policy differs in ${diff.policy_sections_changed.length} section${diff.policy_sections_changed.length === 1 ? '' : 's'}: ${h(diff.policy_sections_changed.join(', '))}.` : 'The evaluator policy is behaviorally unchanged.'}</p>
 <details><summary>View imported policy YAML</summary><pre>${h(draft.policy_body)}</pre></details></section>
 <section class="panel"><h2>Account-specific rules</h2><p>These three sets are independent. The same account may intentionally appear in more than one.</p>
-${diff.account_rules_removed ? `<div class="notice bad"><strong>${h(diff.account_rules_removed)} rule${diff.account_rules_removed === 1 ? '' : 's'} will be removed.</strong><pre>${h(JSON.stringify(Object.fromEntries(Object.entries(diff.account_rule_changes).map(([kind, change]: [string, any]) => [kind, change.removed]).filter(([, removed]: [string, any]) => removed.length)), null, 2))}</pre></div>` : ''}
+${diff.account_rules_removed ? `<div class="notice bad"><strong>${h(diff.account_rules_removed)} rule${diff.account_rules_removed === 1 ? '' : 's'} will be removed.</strong><pre>${h(JSON.stringify(removedRules, null, 2))}</pre></div>` : ''}
 <div class="rule-diff"><div><h3>Before</h3><pre>${h(JSON.stringify(diff.before_account_rules, null, 2))}</pre></div><div><h3>After</h3><pre>${h(JSON.stringify(diff.after_account_rules, null, 2))}</pre></div></div></section>
 <details class="panel"><summary>View exact submitted YAML</summary><pre>${h(draft.source_document)}</pre></details>
 <section class="panel"><h2>Optional live preview</h2><p>Run this imported policy against your feeds before confirming. This contacts current sources and retains normal preview evidence; it is not required for validation.</p>
