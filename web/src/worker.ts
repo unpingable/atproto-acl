@@ -215,6 +215,7 @@ export class Worker {
           fingerprint: item.fingerprint,
         })
       } catch {
+        if (effect) this.controls.finishEffect(effect, 'refused')
         this.finishJob(jobId, 'failed', 'journal_unavailable')
         return
       }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Evaluate personal ATProto attention policy
+Description=Evaluate one personal ATProto attention policy
 After=network-online.target
 Wants=network-online.target
 

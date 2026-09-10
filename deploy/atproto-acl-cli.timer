@@ -1,5 +1,5 @@
 [Unit]
-Description=Periodically evaluate personal ATProto attention policy
+Description=Periodically evaluate one personal ATProto attention policy
 
 [Timer]
 OnBootSec=5m

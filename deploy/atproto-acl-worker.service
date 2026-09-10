@@ -13,6 +13,7 @@ LoadCredential=oauth_key:/etc/atproto-acl/oauth-signing-key.jwk
 LoadCredential=session_secret:/etc/atproto-acl/session-secret
 Environment=ATPROTO_ACL_OAUTH_KEY_FILE=/run/credentials/atproto-acl-worker.service/oauth_key
 Environment=ATPROTO_ACL_SESSION_SECRET_FILE=/run/credentials/atproto-acl-worker.service/session_secret
+ExecStartPre=/usr/bin/test -x ${ATPROTO_ACL_PYTHON}
 ExecStart=/opt/atproto-acl/current/runtime/node-v24.13.0-linux-x64/bin/node dist/worker-main.js
 Restart=on-failure
 RestartSec=5

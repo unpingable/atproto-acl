@@ -5,7 +5,9 @@ Optional root fields: `exempt`, `allow`, `keep_muted` (lists of DIDs or handles)
 Unknown keys and duplicate YAML keys are errors.
 
 Provider aliases map to `{type: atproto_labels, did: ...}` or the narrowly
-supported `{type: external_list, did: did:web:bsky38.com}`. Rules explicitly name
+supported `{type: external_list, did: did:web:bsky38.com}`. This source is an
+unauthenticated third-party HTML snapshot, not DID-signed publisher evidence; its
+retrieval digest is retained with each acquisition. Rules explicitly name
 an alias with `source`; there is no implicit global label source. `fixture`
 providers permit offline demonstrations, including declared `measurements`.
 V0 live providers do not offer numeric measurements.

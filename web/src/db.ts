@@ -88,6 +88,7 @@ export class AppDb {
         singleton INTEGER PRIMARY KEY CHECK(singleton=1),
         writes_enabled INTEGER NOT NULL DEFAULT 1,
         admissions_enabled INTEGER NOT NULL DEFAULT 1,
+        maintenance_enabled INTEGER NOT NULL DEFAULT 0,
         generation INTEGER NOT NULL DEFAULT 1,
         reason TEXT, updated_by TEXT NOT NULL DEFAULT 'bootstrap', updated_at TEXT NOT NULL
       );
@@ -101,6 +102,10 @@ export class AppDb {
       );
       INSERT OR IGNORE INTO service_controls(singleton,updated_at) VALUES(1,datetime('now'));
     `)
+    const controlColumns = this.sql.prepare('PRAGMA table_info(service_controls)').all() as Array<{ name: string }>
+    if (!controlColumns.some(column => column.name === 'maintenance_enabled')) {
+      this.sql.exec('ALTER TABLE service_controls ADD COLUMN maintenance_enabled INTEGER NOT NULL DEFAULT 0')
+    }
     this.sql.exec(ADMISSION_SCHEMA)
   }
 

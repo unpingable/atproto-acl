@@ -17,6 +17,7 @@ Environment=ATPROTO_ACL_SESSION_SECRET_FILE=/run/credentials/atproto-acl-web.ser
 Environment=ATPROTO_ACL_TOMBSTONE_SECRET_FILE=/run/credentials/atproto-acl-web.service/tombstone_secret
 Environment=ATPROTO_ACL_TOMBSTONE_PATH=/var/lib/atproto-acl-deletions/deletions.db
 Environment=ATPROTO_ACL_WORKER=0
+ExecStartPre=/usr/bin/test -x ${ATPROTO_ACL_PYTHON}
 ExecStart=/opt/atproto-acl/current/runtime/node-v24.13.0-linux-x64/bin/node dist/server.js
 Restart=on-failure
 RestartSec=3

@@ -1,12 +1,17 @@
 import { expect, test, type Page } from '@playwright/test'
 import { policy } from '../fixtures.js'
 
-async function signIn(page: Page, handle: string) {
+async function signIn(page: Page, handle: string, grantModeration = true) {
   await page.goto('/')
   await page.getByLabel('Handle').fill(handle)
   await page.getByRole('button', { name: 'Continue' }).click()
   await expect(page.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
   await expect(page.getByText(`@${handle}`, { exact: true }).first()).toBeVisible()
+  const moderationReconnect = page.getByRole('heading', { name: 'Reconnect to enable moderation' })
+  if (grantModeration && await moderationReconnect.isVisible()) {
+    await page.getByRole('button', { name: 'Grant moderation access' }).click()
+    await expect(page.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
+  }
   await expect(page.getByRole('button', { name: 'Take a look' })).toBeVisible()
 }
 
@@ -55,7 +60,7 @@ test('sign out ends only the current browser session', async ({ browser }) => {
   const firstPage = await first.newPage()
   const secondPage = await second.newPage()
   await signIn(firstPage, 'user1.test')
-  await signIn(secondPage, 'user1.test')
+  await signIn(secondPage, 'user1.test', false)
   await firstPage.getByRole('button', { name: 'Sign out' }).click()
   await expect(firstPage.getByRole('heading', { name: 'Choose what earns your attention.' })).toBeVisible()
   await secondPage.reload()
@@ -223,8 +228,7 @@ test('read-only feed yield report explains both surfaces and exact context', asy
 
 test('long-running read-only submit immediately warns against refresh', async ({ page }) => {
   await signIn(page, 'user4.test')
-  await expect(page.getByRole('heading', { name: 'Sign in again to include Discover' })).toBeVisible()
-  await expect(page.locator('form[action="/reconnect"]')).toContainText('Sign in again')
+  await expect(page.getByRole('heading', { name: 'Sign in again to include Discover' })).toHaveCount(0)
   await page.locator('form[action="/diagnostics/yield"]').evaluate(form => {
     form.addEventListener('submit', event => event.preventDefault(), { once: true })
   })
@@ -233,7 +237,6 @@ test('long-running read-only submit immediately warns against refresh', async ({
   await expect(page.getByText(/It keeps going if you go back to the dashboard/)).toBeVisible()
   await expect(page.locator('body')).toHaveAttribute('aria-busy', 'true')
   await page.reload()
-  await page.getByRole('button', { name: 'Sign in again' }).click()
   await expect(page.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sign in again to include Discover' })).toHaveCount(0)
 })
@@ -310,7 +313,7 @@ test('Bsky38 preset retains ranked snapshot evidence and offers an exact opt-out
   await signIn(page, 'user4.test')
   await page.goto('/policies/new?example=bsky38')
   await expect(page.locator('input[name="source_type"]')).toHaveValue('external_snapshot')
-  await expect(page.getByText(/A separate policy that uses the 38 accounts on the leaderboard/)).toBeVisible()
+  await expect(page.getByText(/An unauthenticated third-party snapshot of the 38 accounts/)).toBeVisible()
   await expect(page.getByText('Being on the Bsky38 leaderboard.')).toBeVisible()
   await page.getByRole('button', { name: 'Save and scan now' }).click()
   await expect(page.getByRole('heading', { name: '38 accounts to review' })).toBeVisible()

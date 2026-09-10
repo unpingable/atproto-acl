@@ -8,18 +8,19 @@ import {
   extractFeedExposures,
   sampleFeed,
 } from '../src/feed-exposure.js'
-import { hasRpcPermission, OAUTH_SCOPE, observationRequestPlan, requiredFeedMethods } from '../src/oauth.js'
+import { hasRpcPermission, OAUTH_SCOPE, observationRequestPlan, requiredFeedMethods, WRITE_OAUTH_SCOPE } from '../src/oauth.js'
 
 const profile = (did: string, handle = `${did.slice(8)}.test`) => ({ did, handle })
 
-test('generator acquisition declares and requires both hydrated feed scopes', () => {
+test('generator acquisition requires only the hydrated feed RPC that it calls', () => {
   assert.deepEqual(requiredFeedMethods({ type: 'timeline' }), ['app.bsky.feed.getTimeline'])
   assert.deepEqual(requiredFeedMethods({
     type: 'feed', uri: 'at://did:plc:feed/app.bsky.feed.generator/exact',
-  }), ['app.bsky.feed.getFeed', 'app.bsky.feed.getFeedSkeleton'])
+  }), ['app.bsky.feed.getFeed'])
   assert.match(OAUTH_SCOPE, /rpc\?lxm=app\.bsky\.feed\.getFeed&aud=did:web:api\.bsky\.app%23bsky_appview/)
-  assert.match(OAUTH_SCOPE, /rpc\?lxm=app\.bsky\.feed\.getFeedSkeleton&aud=did:web:api\.bsky\.app%23bsky_appview/)
-  assert.equal(hasRpcPermission(OAUTH_SCOPE.split(' '), 'app.bsky.feed.getFeedSkeleton'), true)
+  assert.doesNotMatch(OAUTH_SCOPE, /getFeedSkeleton|muteActor|unmuteActor/)
+  assert.equal(hasRpcPermission(WRITE_OAUTH_SCOPE.split(' '), 'app.bsky.graph.muteActor'), true)
+  assert.equal(hasRpcPermission(WRITE_OAUTH_SCOPE.split(' '), 'app.bsky.graph.unmuteActor'), true)
   assert.equal(hasRpcPermission([
     'rpc:app.bsky.feed.getFeedSkeleton?aud=did:web:api.bsky.app#bsky_appview',
   ], 'app.bsky.feed.getFeedSkeleton'), true)

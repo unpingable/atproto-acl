@@ -16,7 +16,7 @@ import type { Config } from './config.js'
 const BSKY_APPVIEW_AUD = 'did:web:api.bsky.app%23bsky_appview'
 const rpcScope = (method: string) => `rpc?lxm=${method}&aud=${BSKY_APPVIEW_AUD}`
 
-export const OAUTH_SCOPE = [
+export const READ_OAUTH_SCOPE = [
   'atproto',
   rpcScope('app.bsky.graph.getMutes'),
   rpcScope('app.bsky.actor.getProfile'),
@@ -24,11 +24,16 @@ export const OAUTH_SCOPE = [
   rpcScope('app.bsky.graph.getFollows'),
   rpcScope('app.bsky.feed.getTimeline'),
   rpcScope('app.bsky.feed.getFeed'),
-  rpcScope('app.bsky.feed.getFeedSkeleton'),
   rpcScope('app.bsky.graph.getRelationships'),
+].join(' ')
+
+export const WRITE_OAUTH_SCOPE = [
+  READ_OAUTH_SCOPE,
   rpcScope('app.bsky.graph.muteActor'),
   rpcScope('app.bsky.graph.unmuteActor'),
 ].join(' ')
+
+export const OAUTH_SCOPE = READ_OAUTH_SCOPE
 
 export function hasRpcPermission(scopes: string[], method: string) {
   return scopes.some(scope => {
@@ -42,7 +47,7 @@ export function hasRpcPermission(scopes: string[], method: string) {
 export function requiredFeedMethods(source: FeedSource) {
   return source.type === 'timeline'
     ? ['app.bsky.feed.getTimeline'] as const
-    : ['app.bsky.feed.getFeed', 'app.bsky.feed.getFeedSkeleton'] as const
+    : ['app.bsky.feed.getFeed'] as const
 }
 
 export function observationRequestPlan(remainingRequests: number, profileBatches: number) {
@@ -100,7 +105,10 @@ export class OAuthAccounts implements AccountProvider {
         client_uri: config.origin + '/',
         redirect_uris: [config.origin + '/oauth/callback'],
         grant_types: ['authorization_code', 'refresh_token'],
-        scope: OAUTH_SCOPE,
+        // Metadata declares the maximum capability. Each initial authorization
+        // explicitly requests READ_OAUTH_SCOPE; write authority is requested
+        // only during an operator-enabled reconnect.
+        scope: WRITE_OAUTH_SCOPE,
         response_types: ['code'],
         application_type: 'web',
         token_endpoint_auth_method: 'private_key_jwt',
@@ -139,8 +147,8 @@ export class OAuthAccounts implements AccountProvider {
     return new OAuthAccounts(oauth, db)
   }
 
-  async authorize(handle: string, state: string) {
-    return this.oauth.authorize(handle, { state })
+  async authorize(handle: string, state: string, writeAccess = false) {
+    return this.oauth.authorize(handle, { state, scope: writeAccess ? WRITE_OAUTH_SCOPE : READ_OAUTH_SCOPE })
   }
 
   async callback(params: URLSearchParams) {

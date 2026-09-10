@@ -22,6 +22,9 @@ export type Config = {
   effectsPerDidDay: number
   effectsGlobalDay: number
   queuedActionsGlobal: number
+  bridgeConcurrencyGlobal: number
+  bridgeConcurrencyPerDid: number
+  bridgeQueueDepth: number
   tombstonePath: string
   tombstoneSecret: string
 }
@@ -70,6 +73,9 @@ export function loadConfig(env = process.env): Config {
     effectsPerDidDay: boundedInt(env.ATPROTO_ACL_EFFECTS_PER_DID_DAY, 100, 1, 10000),
     effectsGlobalDay: boundedInt(env.ATPROTO_ACL_EFFECTS_GLOBAL_DAY, 250, 1, 100000),
     queuedActionsGlobal: boundedInt(env.ATPROTO_ACL_QUEUED_ACTIONS_GLOBAL, 500, 1, 100000),
+    bridgeConcurrencyGlobal: boundedInt(env.ATPROTO_ACL_BRIDGE_CONCURRENCY_GLOBAL, 4, 1, 32),
+    bridgeConcurrencyPerDid: boundedInt(env.ATPROTO_ACL_BRIDGE_CONCURRENCY_PER_DID, 1, 1, 8),
+    bridgeQueueDepth: boundedInt(env.ATPROTO_ACL_BRIDGE_QUEUE_DEPTH, 32, 0, 1000),
     tombstonePath: resolve(env.ATPROTO_ACL_TOMBSTONE_PATH ?? `${dataDir}-deletions/deletions.db`),
     tombstoneSecret,
   }

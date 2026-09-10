@@ -81,6 +81,27 @@ test('feed acquisition errors retain safe actionable classifications', () => {
     'The feed source is temporarily unavailable.')
 })
 
+test('a missing policy interpreter returns only an opaque browser-safe diagnostic', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acl-missing-python-'))
+  const config = loadConfig({
+    ATPROTO_ACL_ORIGIN: 'http://127.0.0.1:8426', ATPROTO_ACL_PORT: '8426',
+    ATPROTO_ACL_DATA_DIR: dir, ATPROTO_ACL_PYTHON: '/opt/private/missing/python',
+    ATPROTO_ACL_SESSION_SECRET: 'fixture-session-secret-at-least-32-bytes',
+    ATPROTO_ACL_FIXTURE_MODE: '1', ATPROTO_ACL_WORKER: '0',
+  })
+  const logged: unknown[][] = []
+  await assert.rejects(new Engine(config, undefined, (...items) => { logged.push(items) }).health(true), error => {
+    assert.match(String(error), /policy service is temporarily unavailable/i)
+    assert.match(String(error), /Diagnostic ID: [0-9a-f-]{36}/)
+    assert.doesNotMatch(String(error), /ENOENT|\/opt\/private/)
+    return true
+  })
+  assert.match(String(logged[0]?.[0]), /policy-service:[0-9a-f-]{36}/)
+  assert.match(String(logged[0]?.[0]), /interpreter spawn failed/)
+  assert.match(String(logged[0]?.[1]), /ENOENT|spawn/)
+  assert.match(String(logged[0]?.[1]), /\/opt\/private\/missing\/python/)
+})
+
 test('a running measurement survives restart as explicitly interrupted', () => {
   const dir = mkdtempSync(join(tmpdir(), 'acl-measurement-recovery-'))
   const path = join(dir, 'app.db')
@@ -422,6 +443,8 @@ test('Bsky38 snapshot is bounded and source failure cannot become an empty clear
   const preview = await service.preview(did, policyId)
   assert.equal(preview.receipt.rows.filter(row => row.action === 'mute').length, 38)
   assert.equal((preview.receipt.discovery?.[0] as any).members[0].rank, 1)
+  assert.match(String((preview.receipt.discovery?.[0] as any).retrieval_digest), /^[0-9a-f]{64}$/)
+  assert.equal((preview.receipt.discovery?.[0] as any).authentication, 'none')
 
   const job = service.approve(did, preview.id, 'apply', ['did:plc:leader-1'])
   currentMembers = [

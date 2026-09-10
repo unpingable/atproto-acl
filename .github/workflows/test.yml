@@ -42,3 +42,5 @@ jobs:
         working-directory: web
       - run: npm run test:browser
         working-directory: web
+      - run: deploy/build-candidate.sh "$RUNNER_TEMP/atproto-acl-candidate"
+      - run: deploy/test-candidate.sh "$RUNNER_TEMP/atproto-acl-candidate/atproto-acl-$(git rev-parse HEAD).tar.gz"

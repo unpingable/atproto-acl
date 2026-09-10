@@ -53,6 +53,30 @@ test('global and per-account acquisition starts are bounded', async () => {
   db.close()
 })
 
+test('backup maintenance blocks new acquisition, bridge, and effect work', async () => {
+  const { db, controls } = setup()
+  db.sql.prepare('UPDATE service_controls SET maintenance_enabled=1 WHERE singleton=1').run()
+  await assert.rejects(() => controls.beginAcquisition('did:plc:user'), CapacityError)
+  assert.throws(() => controls.begin('did:plc:user'), CapacityError)
+  assert.throws(() => controls.reserveEffect('did:plc:user'), /maintenance/)
+  db.close()
+})
+
+test('bridge leases are bounded globally and per account across processes', () => {
+  const { db, controls } = setup({
+    ATPROTO_ACL_BRIDGE_CONCURRENCY_GLOBAL: '2',
+    ATPROTO_ACL_BRIDGE_CONCURRENCY_PER_DID: '1',
+  })
+  const first = controls.begin('did:plc:user')
+  assert.throws(() => controls.begin('did:plc:user'), CapacityError)
+  const second = controls.begin('did:plc:other')
+  assert.throws(() => controls.begin('did:plc:third'), CapacityError)
+  controls.finish(first)
+  controls.finish(second)
+  assert.doesNotThrow(() => controls.begin('did:plc:user'))
+  db.close()
+})
+
 test('thirty-day cleanup removes only unapproved previews and measurements', () => {
   const { db } = setup()
   const old = '2026-08-01T00:00:00.000Z'

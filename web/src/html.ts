@@ -156,7 +156,7 @@ function guidedSummary(guided: GuidedPolicy) {
 }
 
 export function dashboard(
-  account: { handle: string; did: string; pds?: string; reconnectRequired?: boolean; writesEnabled?: boolean },
+  account: { handle: string; did: string; pds?: string; reconnectRequired?: boolean; writeReconnectRequired?: boolean; writesEnabled?: boolean },
   csrf: string,
   policies: Record<string, unknown>[],
   jobs: Record<string, unknown>[],
@@ -211,7 +211,8 @@ export function dashboard(
   return page('Dashboard', `
 <section class="dashboard-intro"><p class="eyebrow">@${h(account.handle)}</p><h1>Your feed policies</h1>
 <p>A policy is a saved set of rules for finding noisy accounts. Running one only builds a list — you decide who actually gets muted.</p></section>
-${account.writesEnabled === false ? '<section class="notice preview-only"><strong>Preview access</strong><p>You can measure your feeds and inspect every proposed change. This preview is read-only; moderation actions are not yet generally available.</p></section>' : ''}
+${account.writesEnabled === false && !account.writeReconnectRequired ? '<section class="notice preview-only"><strong>Preview access</strong><p>You can measure your feeds and inspect every proposed change. This preview is read-only; moderation actions are not yet generally available.</p></section>' : ''}
+${account.writeReconnectRequired ? `<section class="notice" aria-labelledby="moderation-connection-heading"><h2 id="moderation-connection-heading">Reconnect to enable moderation</h2><p>Your account is eligible for moderation actions, but this session has read-only authority. Sign in again to explicitly grant mute and unmute access.</p><form method="post" action="/reconnect"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Grant moderation access</button></form></section>` : ''}
 ${account.reconnectRequired ? `<section class="notice" aria-labelledby="connection-heading"><h2 id="connection-heading">Sign in again to include Discover</h2><p>Your Following feed works fine, but Discover needs a permission that wasn’t granted when you first signed in. Your policies, history, and existing mutes are unaffected.</p><form method="post" action="/reconnect"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Sign in again</button></form></section>` : ''}
 ${workspace}
 <section class="coverage-check" aria-labelledby="coverage-heading"><div><h2 id="coverage-heading">Not sure yet? Take a look first</h2>
@@ -250,7 +251,7 @@ ${error ? `<div role="alert" class="notice bad">${h(error)}</div>` : ''}
 <input type="hidden" name="csrf" value="${h(csrf)}"><input type="hidden" name="id" value="${h(value.id ?? '')}">
 ${guided.supported ? `<div class="builder"><section class="editor-step"><div class="step-number">1</div><div class="step-body"><h2>${bsky38 ? 'Leaderboard snapshot' : 'Where to look'}</h2>
 <p>Scanning as <strong>@${h(account.handle)}</strong>.</p>
-${bsky38 ? `<input type="hidden" id="source_type" name="source_type" value="external_snapshot"><p class="source-choice"><strong>Current Bsky38 leaderboard</strong><br><span class="muted">A separate policy that uses the 38 accounts on the leaderboard at the moment you scan. It doesn’t affect your other policies.</span></p>` : `<label for="source_type">Which accounts to check</label><select id="source_type" name="source_type">
+${bsky38 ? `<input type="hidden" id="source_type" name="source_type" value="external_snapshot"><p class="source-choice"><strong>Current Bsky38 leaderboard</strong><br><span class="muted">An unauthenticated third-party snapshot of the 38 accounts on the leaderboard at the moment you scan. It doesn’t affect your other policies.</span></p>` : `<label for="source_type">Which accounts to check</label><select id="source_type" name="source_type">
 <option value="feeds"${guided.sourceType === 'feeds' ? ' selected' : ''}>Accounts in my Following and Discover feeds</option>
 <option value="labeled_stream"${guided.sourceType === 'labeled_stream' ? ' selected' : ''}>Every account on Cornell’s public list</option>
 <option value="follows"${guided.sourceType === 'follows' ? ' selected' : ''}>Only accounts I follow</option>
@@ -418,7 +419,7 @@ export function previewPage(account: { handle: string; did: string; writesEnable
   const summary = summaryParts.join(' ') || 'None of these accounts match your rules right now.'
   const incomplete = receipt.completeness ?? {}
   const sourceNote = discovery?.source === 'external_snapshot' && discovery.retrieved_at
-    ? `<p class="muted">Leaderboard read ${h(new Date(discovery.retrieved_at).toLocaleString('en-US', { timeZone: 'UTC' }))} UTC from <a href="https://bsky38.com/" target="_blank" rel="noreferrer">Bsky38</a>. Who’s on it changes between scans.</p>`
+    ? `<p class="muted">Unauthenticated third-party leaderboard snapshot read ${h(new Date(discovery.retrieved_at).toLocaleString('en-US', { timeZone: 'UTC' }))} UTC from <a href="https://bsky38.com/" target="_blank" rel="noreferrer">Bsky38</a>. Who’s on it changes between scans. Retrieval digest: <code>${h(discovery.retrieval_digest ?? 'unavailable')}</code>.</p>`
     : feedScope ? '<details class="technical sample-note"><summary>How the feed sample was taken</summary><p>“Following” is what Bluesky’s API returns for your following timeline. Your Home tab may mix in other posts, so this sample won’t match it exactly. An account appearing here means it was in the sample, not that you definitely read the post.</p></details>' : ''
   const feedStanding = feedScope ? `<section class="source-standing" aria-label="Feed sources"><p><strong>Scanned ${h(new Date(receipt.evaluated_at).toLocaleString('en-US', { timeZone: 'UTC' }))} UTC.</strong> Scan again for up-to-date results.</p><ul>${discoveryRows.filter(item => (item as any).source === 'feed_exposure').map(item => {
     const source = item as any
