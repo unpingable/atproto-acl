@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "account": "did:plc:demoowner",
+  "subjects": [
+    "did:plc:alice",
+    "did:plc:bob",
+    "did:plc:carol"
+  ],
+  "observations": [
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:alice",
+      "property": "high-volume",
+      "value": true,
+      "observed_at": "2026-09-08T00:00:00Z",
+      "expires_at": "2026-09-09T00:00:00Z"
+    },
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:bob",
+      "property": "high-volume",
+      "value": true,
+      "observed_at": "2026-09-08T00:00:00Z",
+      "expires_at": "2026-09-09T00:00:00Z"
+    },
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:carol",
+      "property": "high-volume",
+      "value": true,
+      "observed_at": "2026-09-08T00:00:00Z",
+      "expires_at": "2026-09-09T00:00:00Z"
+    },
+    {
+      "provider": "did:plc:trusted",
+      "subject": "did:plc:bob",
+      "property": "member",
+      "value": true,
+      "observed_at": "2026-09-08T00:00:00Z",
+      "expires_at": "2026-09-09T00:00:00Z"
+    }
+  ],
+  "coverage": [
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:alice",
+      "complete": true,
+      "checked_at": "2026-09-08T12:00:00Z"
+    },
+    {
+      "provider": "did:plc:trusted",
+      "subject": "did:plc:alice",
+      "complete": true,
+      "checked_at": "2026-09-08T12:00:00Z",
+      "reason": ""
+    },
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:bob",
+      "complete": true,
+      "checked_at": "2026-09-08T12:00:00Z"
+    },
+    {
+      "provider": "did:plc:trusted",
+      "subject": "did:plc:bob",
+      "complete": true,
+      "checked_at": "2026-09-08T12:00:00Z",
+      "reason": ""
+    },
+    {
+      "provider": "did:plc:activity",
+      "subject": "did:plc:carol",
+      "complete": true,
+      "checked_at": "2026-09-08T12:00:00Z"
+    },
+    {
+      "provider": "did:plc:trusted",
+      "subject": "did:plc:carol",
+      "complete": false,
+      "checked_at": "2026-09-08T12:00:00Z",
+      "reason": "publisher unavailable"
+    }
+  ],
+  "remote": {
+    "did:plc:alice": {
+      "known": true,
+      "direct": false,
+      "muted": false,
+      "only_reposts": false,
+      "only_quotes": false,
+      "list": null,
+      "blocked": false
+    },
+    "did:plc:bob": {
+      "known": true,
+      "direct": false,
+      "muted": false,
+      "only_reposts": false,
+      "only_quotes": false,
+      "list": null,
+      "blocked": false
+    },
+    "did:plc:carol": {
+      "known": true,
+      "direct": false,
+      "muted": false,
+      "only_reposts": false,
+      "only_quotes": false,
+      "list": null,
+      "blocked": false
+    }
+  },
+  "discovery": [
+    {
+      "source": "explicit_dids",
+      "subjects": [
+        "did:plc:alice",
+        "did:plc:bob",
+        "did:plc:carol"
+      ],
+      "complete": true,
+      "cursor": null,
+      "reason": ""
+    }
+  ]
+}

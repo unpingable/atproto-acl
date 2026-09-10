@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Hosted beta support
+    url: https://bsky.app/profile/neutral.zone
+    about: Message @neutral.zone on Bluesky for ordinary support.
+  - name: Report a vulnerability privately
+    url: https://github.com/unpingable/atproto-acl/security/advisories/new
+    about: Do not disclose credentials or vulnerability details in a public issue.

@@ -1,0 +1,30 @@
+{
+  "name": "atproto-acl-web",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "worker": "node dist/worker-main.js",
+    "ops": "node dist/ops.js",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:browser": "playwright test",
+    "qualify:oauth-0.5.5": "sh scripts/qualify-oauth-0.5.5.sh",
+    "check": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@atproto/api": "0.20.42",
+    "@atproto/jwk-jose": "0.2.2",
+    "@atproto/oauth-client-node": "0.5.4",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.10.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

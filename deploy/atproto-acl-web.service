@@ -1,0 +1,38 @@
+[Unit]
+Description=atproto-acl web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=atproto-acl
+Group=atproto-acl
+WorkingDirectory=/opt/atproto-acl/current/web
+EnvironmentFile=/etc/atproto-acl/atproto-acl.env
+LoadCredential=oauth_key:/etc/atproto-acl/oauth-signing-key.jwk
+LoadCredential=session_secret:/etc/atproto-acl/session-secret
+LoadCredential=tombstone_secret:/etc/atproto-acl/tombstone-secret
+Environment=ATPROTO_ACL_OAUTH_KEY_FILE=/run/credentials/atproto-acl-web.service/oauth_key
+Environment=ATPROTO_ACL_SESSION_SECRET_FILE=/run/credentials/atproto-acl-web.service/session_secret
+Environment=ATPROTO_ACL_TOMBSTONE_SECRET_FILE=/run/credentials/atproto-acl-web.service/tombstone_secret
+Environment=ATPROTO_ACL_TOMBSTONE_PATH=/var/lib/atproto-acl-deletions/deletions.db
+Environment=ATPROTO_ACL_WORKER=0
+ExecStart=/opt/atproto-acl/current/runtime/node-v24.13.0-linux-x64/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/atproto-acl /var/lib/atproto-acl-deletions
+StateDirectory=atproto-acl atproto-acl-deletions
+StateDirectoryMode=0700
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

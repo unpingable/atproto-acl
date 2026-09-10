@@ -1,0 +1,31 @@
+version: 1
+account: your-handle.bsky.social
+providers:
+  cornell:
+    type: atproto_labels
+    did: did:plc:oubsyca6hhgqhmbbk27lvs7c
+# Choose your universe explicitly. These sources may be combined.
+sources:
+  - type: follows
+# - type: explicit_dids
+#   dids: [did:plc:replace-with-an-account-did]
+# - type: timeline
+#   limit: 500
+# - type: labeled_stream
+#   provider: cornell
+#   limit: 5000
+rules:
+  - name: sustained-or-combined-posting
+    disposition: quarantine
+    when:
+      any:
+        - source: cornell
+          label: monthly-posts-over-twenty-per-day
+        - all:
+            - source: cornell
+              label: made-over-thirty-posts-yesterday
+            - source: cornell
+              label: made-over-thirty-replies-yesterday
+exempt: []
+allow: []
+keep_muted: []

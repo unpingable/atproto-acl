@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "atproto-acl"
+version = "0.2.0"
+description = "Personal ATProto moderation-policy compiler and runtime"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+authors = [{name = "James Beck"}]
+dependencies = ["PyYAML>=6", "cryptography>=41", "cbor2>=5.6"]
+
+[project.urls]
+Repository = "https://github.com/unpingable/atproto-acl"
+
+[project.optional-dependencies]
+test = ["pytest>=7", "build>=1"]
+
+[project.scripts]
+atproto-acl = "atproto_acl.cli:main"
+atproto-acl-host = "atproto_acl.host_bridge:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

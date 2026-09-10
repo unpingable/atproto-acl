@@ -1,0 +1,26 @@
+version: 1
+account: did:plc:demoowner
+providers:
+  activity:
+    type: fixture
+    did: did:plc:activity
+  trusted:
+    type: fixture
+    did: did:plc:trusted
+sources:
+  - type: explicit_dids
+    dids: [did:plc:alice, did:plc:bob, did:plc:carol]
+rules:
+  - name: friends-can-poast
+    disposition: allow
+    when:
+      source: trusted
+      label: member
+  - name: heavy-posting
+    disposition: quarantine
+    when:
+      source: activity
+      label: high-volume
+exempt: []
+allow: []
+keep_muted: []

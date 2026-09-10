@@ -1,0 +1,34 @@
+[Unit]
+Description=atproto-acl action worker
+After=network-online.target atproto-acl-web.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=atproto-acl
+Group=atproto-acl
+WorkingDirectory=/opt/atproto-acl/current/web
+EnvironmentFile=/etc/atproto-acl/atproto-acl.env
+LoadCredential=oauth_key:/etc/atproto-acl/oauth-signing-key.jwk
+LoadCredential=session_secret:/etc/atproto-acl/session-secret
+Environment=ATPROTO_ACL_OAUTH_KEY_FILE=/run/credentials/atproto-acl-worker.service/oauth_key
+Environment=ATPROTO_ACL_SESSION_SECRET_FILE=/run/credentials/atproto-acl-worker.service/session_secret
+ExecStart=/opt/atproto-acl/current/runtime/node-v24.13.0-linux-x64/bin/node dist/worker-main.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadWritePaths=/var/lib/atproto-acl
+StateDirectory=atproto-acl
+StateDirectoryMode=0700
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
