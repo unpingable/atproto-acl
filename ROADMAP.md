@@ -5,8 +5,9 @@
 - [ ] Complete invite-bound admission and preview-only pilot accounts.
 - [ ] Verify two new users under concurrent acquisition with strict isolation.
 - [ ] Diagnose and qualify Chrome OAuth while retaining Firefox coverage.
-- [ ] Enforce durable admission, write, queue, and global capacity controls.
-- [ ] Verify data deletion against every retained backup generation.
+- [x] Enforce durable admission, write, queue, and global capacity controls.
+- [x] Verify restore-after-deletion suppression across every retained backup
+  generation in the controlled restore fixture.
 - [ ] Complete a bounded mute, confirmed readback, reviewed release, and unmute.
 - [ ] Publish a clean-root repository and verify its post-publication security
   settings and artifacts.
