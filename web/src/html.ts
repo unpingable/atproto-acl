@@ -74,7 +74,7 @@ export function helpPage(account?: { handle: string; did: string }, csrf = '') {
 <h2>How do I stop an account being touched at all?</h2><p>Add it to <strong>Accounts to leave alone</strong> on your dashboard. It’ll be skipped by every scan from then on.</p>
 <h2>Sign out vs. disconnect</h2><p><strong>Sign out</strong> just ends this browser session; sign back in any time. <strong>Disconnect</strong> revokes the app’s access to your Bluesky account so it can’t make any more changes. Either way your policies, history, and existing mutes stay as they are. Disconnect lives under <em>Connection and account data</em> on your dashboard.</p>
 <h2>How do I delete everything?</h2><p><a href="/account/delete">Delete my atproto-acl data</a> removes your policies, history, and stored credentials. It does not unmute anyone — if you want accounts unmuted, do that first.</p>
-<h2>Something’s wrong</h2><p><a href="https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq" target="_blank" rel="noopener noreferrer">Message @neutral.zone on Bluesky</a>. For security problems during the limited preview, message @neutral.zone to arrange a private reporting channel. Never send credentials or tokens in a Bluesky message.</p></section>`, account, csrf)
+<h2>Something’s wrong</h2><p><a href="https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq" target="_blank" rel="noopener noreferrer">Message @neutral.zone on Bluesky</a> for ordinary support. Report security problems through <a href="https://github.com/unpingable/atproto-acl/security/advisories/new" target="_blank" rel="noopener noreferrer">GitHub private vulnerability reporting</a>. If that route is unavailable, message @neutral.zone to arrange another private channel; never send credentials, tokens, or exploit details in a Bluesky message.</p></section>`, account, csrf)
 }
 
 export function privacyPage(account?: { handle: string; did: string }, csrf = '') {
@@ -87,7 +87,7 @@ export function privacyPage(account?: { handle: string; did: string }, csrf = ''
 <h2>How long it remains</h2><p>Policies, action history, approved-preview evidence, and mute-ownership records remain until you delete your data. Unapproved previews and measurements expire after 30 days. Live data is removed promptly after deletion can safely complete. Ordinary backup copies expire within 30 days.</p>
 <h2>Deletion and backups</h2><p>Deleting atproto-acl data does not automatically unmute accounts. You can leave existing Bluesky mutes unchanged, or review releases first and then delete. Pending actions are cancelled or refused before deletion.</p><p>To prevent an older backup from restoring deleted account data, the service keeps a keyed deletion tombstone outside ordinary backups for 31 days. It contains a keyed, non-reversible account identifier plus deletion and expiry times. Every restore reapplies retained tombstones before the service accepts traffic.</p>
 <h2>Disconnect is different</h2><p>Disconnect revokes this app’s connection and prevents further execution. It keeps policies, history, approved evidence, and ownership records so you can reconnect later. Existing Bluesky mutes remain.</p>
-<h2>Contact</h2><p>For privacy questions or ordinary support, <a href="https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq" target="_blank" rel="noopener noreferrer">message @neutral.zone on Bluesky</a>. Security reports should use GitHub private vulnerability reporting after the source repository is public.</p>
+<h2>Contact</h2><p>For privacy questions or ordinary support, <a href="https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq" target="_blank" rel="noopener noreferrer">message @neutral.zone on Bluesky</a>. Security reports should use <a href="https://github.com/unpingable/atproto-acl/security/advisories/new" target="_blank" rel="noopener noreferrer">GitHub private vulnerability reporting</a>.</p>
 ${account ? '<p><a class="button danger" href="/account/delete">Delete my atproto-acl data</a></p>' : ''}
 </section>`, account, csrf)
 }
@@ -120,7 +120,7 @@ export function deletedAccountPage() {
 export function landing(loginToken: string, error = '', admissionMode: 'allowlist' | 'invite' | 'open' = 'allowlist') {
   return page('Sign in', `
 <section class="hero"><p class="eyebrow">For Bluesky</p><h1>Choose what earns your attention.</h1>
-<p>Some accounts post often enough to take over your feed. This app finds them and shows you the list, so you can choose what to mute.</p>${admissionMode === 'open' ? '<p class="open-preview"><strong>Open limited beta:</strong> anyone can scan and preview. Mute controls are enabled separately for selected testers.</p>' : ''}</section>
+<p>Some accounts post often enough to take over your feed. This app finds them and shows you the list, so you can choose what to mute.</p>${admissionMode === 'open' ? '<p class="open-preview"><strong>Open limited beta:</strong> Sign in to measure your feeds and inspect every proposed change. This preview is read-only; moderation actions are not yet generally available.</p>' : ''}</section>
 ${error ? `<div role="alert" class="notice bad">${h(error)}</div>` : ''}
 <div class="landing-grid">
 <section class="panel narrow"><h2>Sign in with Bluesky</h2>
@@ -211,7 +211,7 @@ export function dashboard(
   return page('Dashboard', `
 <section class="dashboard-intro"><p class="eyebrow">@${h(account.handle)}</p><h1>Your feed policies</h1>
 <p>A policy is a saved set of rules for finding noisy accounts. Running one only builds a list — you decide who actually gets muted.</p></section>
-${account.writesEnabled === false ? '<section class="notice preview-only"><strong>Preview access</strong><p>You can scan feeds and inspect every proposed change. Mute controls are enabled separately for selected beta testers. <a href="https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq" target="_blank" rel="noopener noreferrer">Message @neutral.zone</a> if you want to test them.</p></section>' : ''}
+${account.writesEnabled === false ? '<section class="notice preview-only"><strong>Preview access</strong><p>You can measure your feeds and inspect every proposed change. This preview is read-only; moderation actions are not yet generally available.</p></section>' : ''}
 ${account.reconnectRequired ? `<section class="notice" aria-labelledby="connection-heading"><h2 id="connection-heading">Sign in again to include Discover</h2><p>Your Following feed works fine, but Discover needs a permission that wasn’t granted when you first signed in. Your policies, history, and existing mutes are unaffected.</p><form method="post" action="/reconnect"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Sign in again</button></form></section>` : ''}
 ${workspace}
 <section class="coverage-check" aria-labelledby="coverage-heading"><div><h2 id="coverage-heading">Not sure yet? Take a look first</h2>

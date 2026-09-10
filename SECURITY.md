@@ -2,11 +2,11 @@
 
 ## Reporting a vulnerability
 
-During the limited hosted preview,
-[message @neutral.zone on Bluesky](https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq)
-to arrange a private reporting channel. Do not send credentials, OAuth tokens,
-private account data, or exploit details in the message. GitHub private vulnerability
-reporting will become the security channel when this repository is public.
+Use [GitHub private vulnerability reporting](https://github.com/unpingable/atproto-acl/security/advisories/new)
+to report a vulnerability. Do not open a public issue or discussion. If private
+reporting is unavailable, [message @neutral.zone on Bluesky](https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq)
+to arrange another private reporting channel; do not send credentials, OAuth
+tokens, private account data, or exploit details in the message.
 
 GitHub Issues are not a support channel. For ordinary beta support,
 [message @neutral.zone on Bluesky](https://bsky.app/profile/neutral.zone).

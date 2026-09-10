@@ -38,5 +38,5 @@ Before calling the service a public beta, the operator verifies a clean public h
 repository security settings after visibility changes, support contact reachability,
 Chrome OAuth, multi-user isolation, deletion-through-restore behavior, global capacity
 controls, the immediate write gate, and one bounded mute/readback/reviewed-release
-lifecycle. Open-preview admission does not publish the repository or grant new accounts
-moderation-write access.
+lifecycle. The repository is public; open-preview admission remains a separate control
+and does not grant new accounts moderation-write access.

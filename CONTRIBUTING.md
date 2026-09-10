@@ -14,7 +14,7 @@ a successful historical action is not proof of current ownership.
 
 V0 uses PyYAML for configuration, cryptography for ECDSA verification, and cbor2
 for protocol signing bytes. New runtime dependencies need a concrete purpose.
-Use Python 3.11-compatible code. The CLI and library are both supported interfaces.
+Use Python 3.10-compatible code. The CLI and library are both supported interfaces.
 
 Version incompatible policy, receipt, and state changes explicitly. Refuse
 unrecognized schemas rather than silently reinterpreting them. Keep repository

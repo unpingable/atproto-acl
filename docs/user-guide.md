@@ -109,8 +109,8 @@ and silently dropping behavior.
 
 ## Help
 
-[Message @neutral.zone on Bluesky](https://bsky.app/profile/neutral.zone). Use
-For security issues during the limited preview, message @neutral.zone to arrange a
-private reporting channel. Never send credentials or tokens in a Bluesky message.
-GitHub private vulnerability reporting will become the security channel when the source
-repository is public.
+[Message @neutral.zone on Bluesky](https://bsky.app/profile/neutral.zone) for ordinary
+support. Report security issues through
+[GitHub private vulnerability reporting](https://github.com/unpingable/atproto-acl/security/advisories/new).
+If that route is unavailable, message @neutral.zone to arrange another private
+channel; never send credentials, tokens, or exploit details in a Bluesky message.
