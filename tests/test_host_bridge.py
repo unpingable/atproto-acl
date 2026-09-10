@@ -52,6 +52,14 @@ def test_host_preview_uses_engine_and_live_journal(tmp_path):
     assert result["incomplete_reasons"] == ["discovery"]
 
 
+def test_host_bridge_lists_authoritative_overrides(tmp_path):
+    common = {"state": str(tmp_path / "engine.db"), "account": "did:plc:viewer"}
+    handle({"command": "override", **common, "subject": "did:plc:subject",
+            "kind": "exempt", "enabled": True})
+    assert handle({"command": "list_overrides", **common}) == {
+        "exempt": ["did:plc:subject"], "allow": [], "keep_muted": []}
+
+
 def test_host_bridge_journals_uncertain_attempt(tmp_path):
     common = {"state": str(tmp_path / "engine.db"), "account": "did:plc:viewer",
               "subject": "did:plc:subject", "action": "mute"}

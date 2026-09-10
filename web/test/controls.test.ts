@@ -32,6 +32,19 @@ test('durable write gate and per-account eligibility both fail closed', () => {
   db.close()
 })
 
+test('write standing and sign-out fail closed without invalidating another session', () => {
+  const { db, controls } = setup()
+  assert.equal(controls.accountWritesEnabled('did:plc:user'), true)
+  db.sql.prepare("UPDATE admissions SET writes_enabled=0 WHERE did='did:plc:user'").run()
+  assert.equal(controls.accountWritesEnabled('did:plc:user'), false)
+  const first = db.createSession('did:plc:user')
+  const second = db.createSession('did:plc:user')
+  assert.equal(db.deleteSession(first.token), 1)
+  assert.equal(db.session(first.token), undefined)
+  assert.equal(db.session(second.token)?.did, 'did:plc:user')
+  db.close()
+})
+
 test('global and per-account acquisition starts are bounded', async () => {
   const { db, controls } = setup({ ATPROTO_ACL_ACQUISITION_STARTS_PER_DID_HOUR: '1' })
   const lease = await controls.beginAcquisition('did:plc:user')

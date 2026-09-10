@@ -21,10 +21,10 @@ test('signed-in privacy notice and account deletion page keep deletion distinct 
   const deletion = deleteAccountPage(account, 'csrf-value', {
     activeJobs: 0, queuedJobs: 2, historicallyAttributedMutes: 3,
   })
-  assert.match(deletion, /Delete data; leave existing Bluesky mutes unchanged/)
-  assert.match(deletion, /Review releases, then delete data/)
-  assert.match(deletion, /3 mutes it created/)
-  assert.match(deletion, /2 pending jobs will be cancelled/)
+  assert.match(deletion, /Delete my data, leave my mutes alone/)
+  assert.match(deletion, /Unmute people first, then delete/)
+  assert.match(deletion, /muting 3 accounts for you/)
+  assert.match(deletion, /2 changes still waiting to run will be cancelled/)
   assert.doesNotMatch(deletion, /value="after_releases"/)
   assert.match(deletion, /name="confirm" value="delete" required/)
 })
@@ -34,7 +34,7 @@ test('review-first deletion becomes available only when no attributed mutes rema
     activeJobs: 0, queuedJobs: 0, historicallyAttributedMutes: 0,
   })
   assert.match(html, /value="after_releases"/)
-  assert.match(html, /I have finished reviewing releases/)
-  assert.match(deletedAccountPage(), /Existing Bluesky mutes were left as they stood/)
+  assert.match(html, /I\u2019m done unmuting people/)
+  assert.match(deletedAccountPage(), /Anyone you had muted is still muted/)
 })
 

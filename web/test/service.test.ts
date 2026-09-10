@@ -31,9 +31,9 @@ function setup() {
       accounts.remote.get(did)!.set(subject, { known: true, direct: false, muted: false })
     }
   }
-  const service = new AclService(db, new Engine(config), accounts,
-    did => acquisition(accounts, did, observations))
   const controls = new ServiceControls(db, config)
+  const service = new AclService(db, new Engine(config), accounts,
+    did => acquisition(accounts, did, observations), undefined, controls)
   return { db, accounts, service, controls, worker: new Worker(db, service, undefined, controls) }
 }
 
@@ -264,6 +264,18 @@ test('exact approval is idempotent, executes, and separately reviews release', a
   await worker.runNext()
   assert.equal(accounts.remote.get(did)!.get('did:plc:alice')!.direct, false)
   assert.equal((service.owned('jobs', releaseJob, did) as any).status, 'completed')
+  db.close()
+})
+
+test('preview-only accounts cannot create an approval or job', async () => {
+  const { db, service } = setup()
+  const did = 'did:plc:user1'
+  const policyId = service.savePolicy(did, 'test', policy(did))
+  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  db.sql.prepare('UPDATE admissions SET writes_enabled=0 WHERE did=?').run(did)
+  assert.throws(() => service.approve(did, preview.id, 'apply', ['did:plc:alice']), /not enabled/)
+  assert.equal((db.sql.prepare('SELECT count(*) count FROM approvals WHERE did=?').get(did) as { count: number }).count, 0)
+  assert.equal((db.sql.prepare('SELECT count(*) count FROM jobs WHERE did=?').get(did) as { count: number }).count, 0)
   db.close()
 })
 

@@ -6,9 +6,9 @@ checks observations published about them, evaluates your policy, and shows the
 result before anything changes.
 
 The hosted beta is at [atproto-acl.neutral.zone](https://atproto-acl.neutral.zone).
-Admission is currently restricted while browser and multi-user qualification is
-completed. Firefox is supported for the pilot; Chrome OAuth remains under
-investigation.
+The hosted service is an open limited preview: anyone with the URL can sign in, scan,
+and preview. New accounts cannot make moderation changes unless the operator enables
+writes for that DID. Chrome OAuth remains under qualification.
 
 ## What it does
 

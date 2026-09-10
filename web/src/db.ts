@@ -44,6 +44,11 @@ export class AppDb {
         enabled INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS policies_user ON policies(did, updated_at DESC);
+      CREATE TABLE IF NOT EXISTS account_exceptions (
+        did TEXT NOT NULL REFERENCES users(did) ON DELETE CASCADE,
+        subject TEXT NOT NULL, kind TEXT NOT NULL, handle TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL, PRIMARY KEY(did, subject, kind)
+      );
       CREATE TABLE IF NOT EXISTS previews (
         id TEXT PRIMARY KEY, did TEXT NOT NULL REFERENCES users(did) ON DELETE CASCADE,
         policy_id TEXT NOT NULL, policy_revision INTEGER NOT NULL, effective_hash TEXT NOT NULL,
@@ -138,6 +143,11 @@ export class AppDb {
       FROM web_sessions s JOIN users u ON u.did=s.did
       WHERE s.token_hash=? AND s.expires_at>?`).get(sha(token), now()) as Record<string, unknown> | undefined
     return row
+  }
+
+  deleteSession(token: string | undefined) {
+    if (!token) return 0
+    return this.sql.prepare('DELETE FROM web_sessions WHERE token_hash=?').run(sha(token)).changes
   }
 
   checkCsrf(session: Record<string, unknown>, token: string | undefined) {

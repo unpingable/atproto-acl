@@ -34,6 +34,11 @@ export class ServiceControls {
     if (!row?.writes_enabled) throw new Error('Moderation changes are not enabled for this beta account.')
   }
 
+  accountWritesEnabled(did: string) {
+    try { this.requireAccountWrite(did); return true }
+    catch { return false }
+  }
+
   set(kind: 'writes' | 'admissions', enabled: boolean, operator: string, reason: string) {
     const column = kind === 'writes' ? 'writes_enabled' : 'admissions_enabled'
     this.db.transaction(() => {

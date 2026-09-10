@@ -503,6 +503,7 @@ export class AclService {
   }
 
   approve(did: string, previewId: string, kind: 'apply' | 'apply_followed' | 'release', subjects: string[]) {
+    this.controls?.requireAccountWrite(did)
     return this.db.transaction(() => {
       const preview = this.db.sql.prepare('SELECT * FROM previews WHERE id=? AND did=? AND expires_at>?')
         .get(previewId, did, now()) as Record<string, unknown> | undefined

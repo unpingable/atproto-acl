@@ -6,6 +6,7 @@ import type { Acquisition, Receipt } from './types.js'
 import type { Config } from './config.js'
 
 type BridgeReply<T> = { ok: true; result: T } | { ok: false; error: string }
+export type OverrideState = { exempt: string[]; allow: string[]; keep_muted: string[] }
 
 export class Engine {
   constructor(private config: Config) {}
@@ -77,9 +78,13 @@ export class Engine {
   }
 
   override(account: string, subject: string, kind: string, enabled: boolean) {
-    return this.call({
+    return this.call<OverrideState>({
       command: 'override', account, state: this.statePath(account), subject, kind, enabled,
     })
+  }
+
+  overrides(account: string) {
+    return this.call<OverrideState>({ command: 'list_overrides', account, state: this.statePath(account) })
   }
 }
 

@@ -15,8 +15,8 @@ Before changing visibility:
    generated reports and databases are absent.
 4. Run the complete offline test/build workflow and record the exact revision and
    artifact digest.
-5. Deploy that artifact with invite-only admission and external writes disabled
-   until separately authorized.
+5. Deploy that artifact with open admission and external writes disabled for
+   newly admitted accounts. Do not require or distribute invite codes.
 
 Changing a GitHub repository from private to public can expose prior Actions logs
 and disables push rulesets. Use this launch order:
@@ -26,7 +26,8 @@ and disables push rulesets. Use this launch order:
 3. Enable private vulnerability reporting and verify secret scanning.
 4. Inspect every now-public Actions log and artifact.
 5. Complete the public-ready acceptance and approve its launch packet.
-6. Only then switch admission from invite-only to open.
+6. Keep open-preview admission in place; publishing the repository does not grant
+   moderation-write access to newly admitted accounts.
 
 Keep Issues and Discussions disabled. Ordinary support goes to `@neutral.zone` on
 Bluesky; security reports use GitHub private vulnerability reporting.

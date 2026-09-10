@@ -2,10 +2,11 @@
 
 ## Reporting a vulnerability
 
-Please use GitHub's **Report a vulnerability** form in the repository Security
-tab. It creates a private report and is the preferred channel for security issues.
-Do not include credentials, OAuth tokens, private account data, or an exploit
-against a real user's account in a public issue or discussion.
+During the limited hosted preview,
+[message @neutral.zone on Bluesky](https://bsky.app/profile/did:plc:dki5xu3vgyo7ubl7vaw55zzq)
+to arrange a private reporting channel. Do not send credentials, OAuth tokens,
+private account data, or exploit details in the message. GitHub private vulnerability
+reporting will become the security channel when this repository is public.
 
 GitHub Issues are not a support channel. For ordinary beta support,
 [message @neutral.zone on Bluesky](https://bsky.app/profile/neutral.zone).

@@ -2,7 +2,7 @@
 
 ## Public beta gate
 
-- [ ] Complete invite-bound admission and preview-only pilot accounts.
+- [x] Open admission without invite codes; new accounts start preview-only.
 - [ ] Verify two new users under concurrent acquisition with strict isolation.
 - [ ] Diagnose and qualify Chrome OAuth while retaining Firefox coverage.
 - [x] Enforce durable admission, write, queue, and global capacity controls.
@@ -13,8 +13,9 @@
   settings and artifacts.
 - [ ] Verify the support contact and approve the immutable launch packet.
 
-The Discord pilot and public launch are separate decisions. Pilot completion does
-not change admission automatically.
+Publishing the repository and calling the service a public beta remain separate
+decisions after the open-preview tranche. Open preview does not grant moderation-write
+access.
 
 ## Later
 

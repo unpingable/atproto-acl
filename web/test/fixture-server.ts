@@ -16,7 +16,7 @@ const config = loadConfig({
   ATPROTO_ACL_DATA_DIR: dir, ATPROTO_ACL_PYTHON: process.env.ATPROTO_ACL_TEST_PYTHON ?? 'python3',
   ATPROTO_ACL_SESSION_SECRET: 'fixture-browser-session-secret-32-bytes',
   ATPROTO_ACL_FIXTURE_MODE: '1', ATPROTO_ACL_WORKER: '1',
-  ATPROTO_ACL_ALLOWED_DIDS: 'did:plc:user1,did:plc:user2,did:plc:user3,did:plc:user4',
+  ATPROTO_ACL_ADMISSION_MODE: 'open',
 })
 const db = new AppDb(join(dir, 'app.db'))
 const accounts = new FakeAccounts()
@@ -24,6 +24,10 @@ accounts.add('did:plc:user1', 'user1.test')
 accounts.add('did:plc:user2', 'user2.test')
 accounts.add('did:plc:user3', 'user3.test')
 accounts.add('did:plc:user4', 'user4.test')
+accounts.add('did:plc:user5', 'user5.test')
+for (const did of ['did:plc:user1', 'did:plc:user2', 'did:plc:user3', 'did:plc:user4']) {
+  db.sql.prepare("INSERT INTO admissions(did,source,writes_enabled,created_at,updated_at) VALUES(?,'allowlist',1,datetime('now'),datetime('now'))").run(did)
+}
 for (const did of accounts.profiles.keys()) {
   if (did === 'did:plc:user3') continue
   const subjects = did === 'did:plc:user4'

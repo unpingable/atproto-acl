@@ -27,16 +27,16 @@ record names the exact source revision and immutable artifact. Live browser OAut
 feed acquisition, mute/readback, and reviewed release evidence must be reported
 separately from fixtures.
 
-The restricted beta currently supports Firefox. Chrome OAuth remains a public-beta
+The open limited preview is qualified in Firefox. Chrome OAuth remains a public-beta
 blocker until a current release completes the full sign-in and return journey.
 Self-hosted PDS compatibility is useful additional evidence but is not inferred
 from accounts hosted on different Bluesky-operated PDS instances.
 
 ## Publication gate
 
-Before open admission, the operator verifies a clean public history, repository
-security settings after visibility changes, support contact reachability, Chrome
-OAuth, multi-user isolation, deletion-through-restore behavior, global capacity
+Before calling the service a public beta, the operator verifies a clean public history,
+repository security settings after visibility changes, support contact reachability,
+Chrome OAuth, multi-user isolation, deletion-through-restore behavior, global capacity
 controls, the immediate write gate, and one bounded mute/readback/reviewed-release
-lifecycle. Passing a Discord pilot records evidence for this gate; it does not
-open admission automatically.
+lifecycle. Open-preview admission does not publish the repository or grant new accounts
+moderation-write access.

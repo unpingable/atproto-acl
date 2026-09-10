@@ -86,7 +86,7 @@ function yieldReportPage(
   report: any,
   query = '',
 ) {
-  const sourceNames: Record<string, string> = { timeline: 'Timeline', generator: 'Discover' }
+  const sourceNames: Record<string, string> = { timeline: 'Following', generator: 'Discover' }
   const sourceRows = report.sources ?? []
   const status = report.status ?? 'completed'
   const active = status === 'running'
@@ -95,15 +95,15 @@ function yieldReportPage(
     const name = sourceNames[source.surface] ?? source.surface
     const items = source.items_fetched ?? source.completed ?? 0
     const authors = source.distinct_authors
-    if (source.complete) return `${name} sampled ${items} feed items and found ${authors} distinct authors.`
-    if (active) return `${name} has sampled ${items} of ${source.total ?? 500} feed items so far.`
-    return `${name} stopped after ${items} feed items${authors !== undefined ? ` and ${authors} distinct authors` : ''}.`
+    if (source.complete) return `${name}: read ${items} posts by ${authors} different accounts.`
+    if (active) return `${name}: read ${items} of ${source.total ?? 500} posts so far.`
+    return `${name}: stopped after ${items} posts${authors !== undefined ? ` by ${authors} different accounts` : ''}.`
   }).join(' ')
   const technicalSources = sourceRows.map((source: any) => `
     <section class="result-section">
       <div class="section-heading"><div><p class="eyebrow">${h(sourceNames[source.surface] ?? source.surface)}</p>
-      <h3>${h(String(source.items_fetched ?? source.completed ?? 0))} feed items · ${source.distinct_authors === undefined ? 'author count pending' : `${h(String(source.distinct_authors))} distinct authors`}</h3></div>
-      <span class="status ${source.complete ? 'status-good' : 'status-warn'}">${source.complete ? 'Sample complete' : active ? 'In progress' : 'Incomplete'}</span></div>
+      <h3>${h(String(source.items_fetched ?? source.completed ?? 0))} posts · ${source.distinct_authors === undefined ? 'counting accounts…' : `${h(String(source.distinct_authors))} accounts`}</h3></div>
+      <span class="status ${source.complete ? 'status-good' : 'status-warn'}">${source.complete ? 'Finished' : active ? 'Reading' : 'Stopped early'}</span></div>
       ${source.reason ? `<p class="notice">${h(source.reason)}</p>` : ''}
       ${source.relationships ? `<dl class="metrics compact-metrics">
         <div><dt>Author occurrences</dt><dd>${h(String(source.author_occurrences))}</dd></div>
@@ -111,21 +111,21 @@ function yieldReportPage(
         <div><dt>Not followed</dt><dd>${h(String(source.relationships.not_followed ?? 0))}</dd></div>
         <div><dt>Followed</dt><dd>${h(String(source.relationships.followed ?? 0))}</dd></div>
       </dl>` : ''}
-      ${source.prefixes?.length ? `<div class="table-wrap"><table><thead><tr><th>Sample size</th><th>Authors</th><th>Publisher checks</th><th>Positive labels</th><th>Matches</th><th>Proposed mutes</th><th>Followed review</th><th>Unresolved</th></tr></thead><tbody>
+      ${source.prefixes?.length ? `<div class="table-wrap"><table><thead><tr><th>Posts read</th><th>Accounts</th><th>Looked up</th><th>Had labels</th><th>Matched rules</th><th>Would mute</th><th>You follow</th><th>Couldn’t tell</th></tr></thead><tbody>
       ${source.prefixes.map((prefix: any) => `<tr><td>${h(String(prefix.items))}</td><td>${h(String(prefix.distinct_authors))}</td><td>${h(String(prefix.publisher_checks))}</td><td>${h(String(prefix.positive_labels))}</td><td>${h(String(prefix.matching_accounts))}</td><td>${h(String(prefix.actionable_mutes))}</td><td>${h(String(prefix.followed_review))}</td><td>${h(String(prefix.unresolved))}</td></tr>`).join('')}
       </tbody></table></div>` : ''}
     </section>`).join('')
 
   if (active || interrupted) {
-    const heading = active ? 'Measuring your feeds…' : 'Measurement stopped'
+    const heading = active ? 'Reading your feeds…' : 'The scan stopped early'
     const explanation = active
-      ? 'You can return to the dashboard while this bounded read-only check continues. It cannot create a moderation action.'
-      : report.interruption_reason ?? 'The service stopped before the read-only measurement completed.'
+      ? 'This takes a moment. You can go back to the dashboard and it will keep going — it only reads, so it can’t change anything on your account.'
+      : report.interruption_reason ?? 'The scan stopped before it finished. Nothing was changed. You can start a new one.'
     return page('Feed coverage', `
-      <nav><a href="/app">← Dashboard</a></nav><header class="page-heading"><div><p class="eyebrow">Read-only measurement</p><h1>${h(heading)}</h1><p>${h(explanation)}</p><p><a class="button" href="/app">Back to dashboard</a></p></div><span class="status ${active ? 'status-warn' : 'needs_review'}">${h(status)}</span></header>
-      ${sourceSummary ? `<section class="panel"><p>${h(sourceSummary)}</p></section>` : '<section class="panel"><p>Preparing the first feed request.</p></section>'}
-      <details class="technical"><summary>Captured acquisition details</summary>${technicalSources || '<p>No feed page completed before the interruption.</p>'}</details>
-      ${active ? '<span id="measurement-refresh" data-auto-refresh="true" class="muted" role="status">Checking for new results…</span>' : ''}`, account, csrf)
+      <nav><a href="/app">← Dashboard</a></nav><section class="title page-heading"><div><p class="eyebrow">Nothing is being changed</p><h1>${h(heading)}</h1><p>${h(explanation)}</p><p><a class="button" href="/app">Back to dashboard</a></p></div><span class="status ${active ? 'status-warn' : 'needs_review'}">${h(status)}</span></section>
+      ${sourceSummary ? `<section class="panel"><p>${h(sourceSummary)}</p></section>` : '<section class="panel"><p>Asking Bluesky for the first batch of posts.</p></section>'}
+      <details class="technical"><summary>Technical details</summary>${technicalSources || '<p>No feed page finished before this stopped.</p>'}</details>
+      ${active ? '<span id="measurement-refresh" data-auto-refresh="true" class="muted" role="status">Checking for updates…</span>' : ''}`, account, csrf)
   }
 
   const allPeople = (report.affected ?? []).filter((item: any) => item.subject !== report.account?.did)
@@ -144,13 +144,13 @@ function yieldReportPage(
     const avatar = safeAvatarUrl(item.avatar)
     const title = item.display_name || (item.handle ? `@${item.handle}` : item.subject)
     const conditions = [...new Set((item.evidence ?? []).map((entry: any) => evidenceLabels[entry.property] ?? entry.property))]
-    const surfaces = [...new Set((item.exposures ?? []).map((entry: any) => entry.surface === 'generator' ? 'Discover' : 'Timeline'))]
+    const surfaces = [...new Set((item.exposures ?? []).map((entry: any) => entry.surface === 'generator' ? 'Discover' : 'Following'))]
     return `<article class="result measurement-account"><div></div><div>
       <div class="account-heading">${avatar ? `<img class="avatar" src="${h(avatar)}" alt="">` : '<span class="avatar avatar-placeholder" aria-hidden="true"></span>'}<div><h3><a href="${h(profile)}" target="_blank" rel="noopener noreferrer">${h(title)}</a></h3>${item.display_name && item.handle ? `<p class="handle"><a href="${h(profile)}" target="_blank" rel="noopener noreferrer">@${h(item.handle)}</a></p>` : ''}<p class="profile-link"><a href="${h(profile)}" target="_blank" rel="noopener noreferrer">View profile</a></p></div></div>
-      <p><strong>Why it matched:</strong> ${h(conditions.join(' · ') || 'Matched the selected policy conditions')}</p>
-      <p><strong>Where it appeared:</strong> ${h(surfaces.join(' and ') || 'Exposure details unavailable')}</p>
+      <p><strong>Why:</strong> ${h(conditions.join(' · ') || 'Matched the rules in the example policy')}</p>
+      <p><strong>Seen in:</strong> ${h(surfaces.join(' and ') || 'couldn’t tell')}</p>
       ${exposureDetails(item.exposures ?? [])}
-      <details class="technical"><summary>Evidence and account details</summary><p class="did">${h(item.subject)}</p><ul>${(item.evidence ?? []).map((entry: any) => `<li>${h(evidenceLabels[entry.property] ?? entry.property)} · observed ${h(entry.observed_at)}${entry.expires_at ? ` · expires ${h(entry.expires_at)}` : ''}</li>`).join('')}</ul></details>
+      <details class="technical"><summary>Posting data and account details</summary><p class="did">${h(item.subject)}</p><ul>${(item.evidence ?? []).map((entry: any) => `<li>${h(evidenceLabels[entry.property] ?? entry.property)} · observed ${h(entry.observed_at)}${entry.expires_at ? ` · expires ${h(entry.expires_at)}` : ''}</li>`).join('')}</ul></details>
     </div></article>`
   }
   const overall = report.overall ?? {}
@@ -162,29 +162,32 @@ function yieldReportPage(
     const name = sourceNames[source.surface] ?? source.surface
     const added = source.added_distinct_authors
     const addedMatches = source.added_matching_accounts
-    return `<li><strong>${h(name)}:</strong> ${h(String(source.items_fetched ?? 0))} items · ${h(String(source.distinct_authors ?? 0))} authors${added === undefined ? '' : ` · ${h(String(added))} new beyond earlier sources`}${addedMatches === undefined ? '' : ` · ${h(String(addedMatches))} new matches`}</li>`
+    return `<li><strong>${h(name)}:</strong> ${h(String(source.items_fetched ?? 0))} posts · ${h(String(source.distinct_authors ?? 0))} accounts${added === undefined ? '' : ` · ${h(String(added))} not seen in another feed`}${addedMatches === undefined ? '' : ` · ${h(String(addedMatches))} matched`}</li>`
   }).join('')
-  const defaultView = query ? 'all' : 'proposed'
-  return page('Feed coverage', `
-    <nav><a href="/app">← Dashboard</a></nav><header class="page-heading"><div><p class="eyebrow">Read-only measurement</p><h1>${h(String(matched))} accounts matched</h1>
-    <p><strong>${h(String(feedMatched))}</strong> found in this feed sample${retainedMatched ? ` · <strong>${h(String(retainedMatched))}</strong> retained from earlier action state` : ''}.</p>
-    <p><strong>${h(String(proposed.length))}</strong> proposed ${proposed.length === 1 ? 'mute' : 'mutes'} · <strong>${h(String(followed.length))}</strong> ${followed.length === 1 ? 'person' : 'people'} you follow for separate review${handled.length ? ` · <strong>${h(String(handled.length))}</strong> already handled or unchanged` : ''}. This measurement made no moderation changes.</p></div></header>
-    <div class="metrics"><div><strong>${h(String(totalItems))}</strong><span>feed items sampled</span></div><div><strong>${h(String(overall.distinct_authors ?? '—'))}</strong><span>unique authors across feeds</span></div><div><strong>${h(String(proposed.length))}</strong><span>proposed mutes</span></div><div><strong>${h(String(followed.length))}</strong><span>followed review</span></div></div>
-    <section class="source-standing"><p><strong>Feed sample standing</strong></p><ul>${sourceStanding}</ul></section>
-    <form method="get"><label for="q">Search matching accounts</label><div class="search"><input id="q" name="q" value="${h(query)}"><button class="quiet">Search</button></div></form>
+  const defaultView = query || !proposed.length ? 'all' : 'proposed'
+  // Empty chips lead nowhere, so only render the ones with something behind them.
+  const filterButton = (value: string, label: string, count: number) => !count && value !== 'all' ? '' :
+    `<button type="button" class="result-filter${defaultView === value ? ' active' : ''}" data-result-filter="${value}" aria-pressed="${defaultView === value}">${h(label)} <span>${count}</span></button>`
+  return page('What a scan would find', `
+    <nav><a href="/app">← Dashboard</a></nav><section class="title page-heading"><div><p class="eyebrow">Nothing was changed</p><h1>${matched ? `${h(String(matched))} account${matched === 1 ? '' : 's'} would match` : 'Nothing in your feed matched'}</h1>
+    <p>${matched ? `${h(String(proposed.length))} could be muted${followed.length ? ` · ${h(String(followed.length))} you follow, listed separately` : ''}${handled.length ? ` · ${h(String(handled.length))} already muted or left alone` : ''}.` : 'Nobody in this sample of your feeds posts often enough to match the example rules.'}</p>
+    <p class="scope-line">Read ${h(String(totalItems))} posts by ${h(String(overall.distinct_authors ?? '—'))} different accounts${retainedMatched ? `, plus ${h(String(retainedMatched))} from your earlier scans` : ''}. This was a look, not a change — set up a policy when you want to actually mute anyone.</p></div></section>
+    <div class="metrics"><div><strong>${h(String(totalItems))}</strong><span>posts read</span></div><div><strong>${h(String(overall.distinct_authors ?? '—'))}</strong><span>accounts seen</span></div><div><strong>${h(String(proposed.length))}</strong><span>would be muted</span></div><div><strong>${h(String(followed.length))}</strong><span>you follow</span></div></div>
+    <section class="source-standing"><p><strong>What each feed added</strong></p><ul>${sourceStanding}</ul></section>
+    <form method="get"><label for="q">Search these accounts</label><div class="search"><input id="q" name="q" value="${h(query)}"><button class="quiet">Search</button></div></form>
     <div class="result-filters" role="group" aria-label="Filter matching accounts" data-default-filter="${h(defaultView)}">
-      <button type="button" class="result-filter${defaultView === 'proposed' ? ' active' : ''}" data-result-filter="proposed" aria-pressed="${defaultView === 'proposed'}">Proposed mutes <span>${proposed.length}</span></button>
-      <button type="button" class="result-filter" data-result-filter="followed" aria-pressed="false">People you follow <span>${followed.length}</span></button>
-      <button type="button" class="result-filter" data-result-filter="unchanged" aria-pressed="false">Already handled / no change <span>${handled.length}</span></button>
-      <button type="button" class="result-filter${defaultView === 'all' ? ' active' : ''}" data-result-filter="all" aria-pressed="${defaultView === 'all'}">All matches <span>${people.length}</span></button>
+      ${filterButton('proposed', 'Would be muted', proposed.length)}
+      ${filterButton('followed', 'People you follow', followed.length)}
+      ${filterButton('unchanged', 'Already handled', handled.length)}
+      ${filterButton('all', 'Everyone', people.length)}
     </div>
-    <div class="filter-empty" role="status" hidden>No accounts in this view.</div>
+    <div class="filter-empty" role="status" hidden>Nothing in this view.</div>
     <section class="result-group" data-result-group="proposed"><div class="results">${proposed.map(person).join('')}</div><nav class="result-pages" aria-label="Proposed mute pages"></nav></section>
-    <section class="result-group" data-result-group="followed"><div class="notice"><strong>Review followed accounts separately</strong><p>You already chose to follow these accounts.</p></div><div class="results">${followed.map(person).join('')}</div><nav class="result-pages" aria-label="Followed account pages"></nav></section>
+    <section class="result-group" data-result-group="followed"><div class="notice"><strong>These are people you follow</strong><p>They matched, but they’re listed on their own so you don’t mute a friend by accident.</p></div><div class="results">${followed.map(person).join('')}</div><nav class="result-pages" aria-label="Followed account pages"></nav></section>
     <section class="result-group" data-result-group="unchanged"><div class="results">${handled.map(person).join('')}</div><nav class="result-pages" aria-label="Already handled result pages"></nav></section>
-    ${!people.length ? '<p class="empty">No matching accounts match this search.</p>' : ''}
-    <details class="technical receipt"><summary>Technical measurement details</summary><p>${h(sourceSummary)}</p>${technicalSources}<dl><dt>Policy hash</dt><dd><code>${h(report.policy_hash)}</code></dd><dt>Acquisition hash</dt><dd><code>${h(report.acquisition_hash)}</code></dd><dt>Evaluated</dt><dd>${h(report.evaluated_at)}</dd><dt>Policy evaluation complete</dt><dd>${h(String(report.policy_evaluation_complete ?? report.complete))}</dd></dl><pre>${h(JSON.stringify(report.policy, null, 2))}</pre></details>
-    <p><a class="button secondary" href="/app">Back to policies</a></p>`, account, csrf)
+    ${!people.length ? '<p class="empty">Nothing matches that search.</p>' : ''}
+    <div class="actions next-step"><a class="button" href="/policies/new?example=poasters">Set up a scan like this</a><a href="/app">Back to dashboard</a></div>
+    <details class="technical receipt"><summary>Technical details</summary><p>${h(sourceSummary)}</p>${technicalSources}<dl><dt>Policy hash</dt><dd><code>${h(report.policy_hash)}</code></dd><dt>Acquisition hash</dt><dd><code>${h(report.acquisition_hash)}</code></dd><dt>Evaluated</dt><dd>${h(report.evaluated_at)}</dd><dt>Policy evaluation complete</dt><dd>${h(String(report.policy_evaluation_complete ?? report.complete))}</dd></dl><pre>${h(JSON.stringify(report.policy, null, 2))}</pre></details>`, account, csrf)
 }
 export async function createApp(config: Config, db: AppDb, service: AclService, auth: Auth) {
   db.recoverInterruptedMeasurements()
@@ -220,6 +223,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
     const account = session ? {
       did, handle: String(session.handle), pds: String(session.pds ?? ''),
       reconnectRequired: !hasRpcPermission(grantedScopes, 'app.bsky.feed.getFeedSkeleton'),
+      writesEnabled: controls.accountWritesEnabled(did),
     } : undefined
     const csrf = jar.acl_csrf ?? ''
     try {
@@ -247,11 +251,11 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         return send(res, 200, landing(token, url.searchParams.get('error') ?? '', config.admissionMode))
       }
       if (req.method === 'POST') {
-        if (req.headers.origin !== config.origin) return send(res, 403, page('Request refused', '<h1>Request origin was not accepted.</h1>'))
+        if (req.headers.origin !== config.origin) return send(res, 403, page('Request refused', '<section class="title"><div><h1>That request didn’t come from here</h1><p>Nothing was changed. Go back and try again from this site.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         const form = await body(req)
         if (url.pathname === '/oauth/start') {
           const token = form.get('login_token') ?? ''
-          if (!validLoginToken(config, token)) return send(res, 403, page('Request refused', '<h1>Sign-in request expired.</h1>'))
+          if (!validLoginToken(config, token)) return send(res, 403, page('Request refused', '<section class="title"><div><h1>That sign-in link expired</h1><p>Start again from the sign-in page.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
           const handle = (form.get('handle') ?? '').trim().replace(/^@/, '')
           if (!/^[a-zA-Z0-9.-]{3,253}$/.test(handle)) throw new Error('enter a valid account handle')
           const attempt = admissions.begin({ inviteCode: form.get('invite_code') ?? undefined })
@@ -259,9 +263,9 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           return redirect(res, target.toString())
         }
         if (!session || !db.checkCsrf(session, form.get('csrf') ?? undefined) || form.get('csrf') !== csrf) {
-          return send(res, 403, page('Request refused', '<h1>Your session or form token expired.</h1>'))
+          return send(res, 403, page('Request refused', '<section class="title"><div><h1>Your session expired</h1><p>Nothing was changed. Sign in again and repeat what you were doing.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         }
-        if (!Number(session.connected) && url.pathname !== '/disconnect') return send(res, 403, page('Disconnected', '<h1>This account is disconnected.</h1>'))
+        if (!Number(session.connected) && !['/disconnect', '/signout'].includes(url.pathname)) return send(res, 403, page('Disconnected', '<section class="title"><div><h1>This account is disconnected</h1><p>Sign in again to use the app.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         if (privacy.deletionRequested(did) && url.pathname !== '/account/delete') {
           return send(res, 409, deleteAccountPage(account!, csrf, privacy.standing(did), 'Account deletion is pending.'))
         }
@@ -361,9 +365,24 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           const resolved = await (await service.accounts.restore(did)).resolve([actor])
           const subject = resolved[actor]
           if (!subject || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new Error('account could not be resolved to a DID')
-          await service.engine.override(did, subject, kind, form.get('enabled') === '1')
-          db.audit(did, 'override_changed', { subject, kind, enabled: form.get('enabled') === '1' })
+          const enabled = form.get('enabled') === '1'
+          await service.engine.override(did, subject, kind, enabled)
+          try {
+            if (enabled) {
+              db.sql.prepare('INSERT OR REPLACE INTO account_exceptions (did,subject,kind,handle,created_at) VALUES (?,?,?,?,?)')
+                .run(did, subject, kind, actor === subject ? '' : actor, new Date().toISOString())
+            } else {
+              db.sql.prepare('DELETE FROM account_exceptions WHERE did=? AND subject=? AND kind=?').run(did, subject, kind)
+            }
+          } catch { db.audit(did, 'override_handle_cache_failed', { subject, kind }) }
+          db.audit(did, 'override_changed', { subject, kind, enabled })
           return redirect(res, '/app')
+        }
+        if (url.pathname === '/signout') {
+          db.deleteSession(jar.acl_session)
+          db.audit(did, 'signed_out', { connection_retained: true })
+          res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
+          return redirect(res, '/')
         }
         if (url.pathname === '/disconnect') {
           db.transaction(() => {
@@ -376,7 +395,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           try { await (await service.accounts.restore(did)).disconnect() } catch {}
           db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
           res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
-          return send(res, 200, page('Disconnected', '<h1>Account disconnected</h1><p>No further actions will run. Existing mutes remain in your account.</p><p><a href="/">Return to sign in</a></p>'))
+          return send(res, 200, page('Disconnected', '<section class="title"><div><h1>App disconnected</h1><p>This app can no longer read your feeds or change your mutes. Anyone you muted stays muted, and your policies and history are still here if you sign in again.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         }
         if (url.pathname === '/account/delete') {
           if (form.get('confirm') !== 'delete') throw new Error('Confirm that you want to delete this account data.')
@@ -430,7 +449,17 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
       if (!session || !account) return redirect(res, '/')
       if (privacy.deletionRequested(did)) return send(res, 409, deleteAccountPage(account, csrf, privacy.standing(did), 'Account deletion is pending.'))
       if (req.method === 'GET' && url.pathname === '/app') {
-        return send(res, 200, dashboard(account, csrf, service.listPolicies(did), service.listJobs(did), service.listYieldReports(did)))
+        let exceptions: Record<string, unknown>[] = []
+        let exceptionsAvailable = true
+        try {
+          const authoritative = await service.engine.overrides(did)
+          const cached = db.sql.prepare('SELECT subject,kind,handle FROM account_exceptions WHERE did=?').all(did) as Record<string, unknown>[]
+          const handles = new Map(cached.map(item => [`${item.subject}\u0000${item.kind}`, String(item.handle ?? '')]))
+          exceptions = Object.entries(authoritative).flatMap(([kind, subjects]) => subjects.map(subject => ({
+            subject, kind, handle: handles.get(`${subject}\u0000${kind}`) ?? '',
+          }))).sort((a, b) => String(a.subject).localeCompare(String(b.subject)))
+        } catch { exceptionsAvailable = false }
+        return send(res, 200, dashboard(account, csrf, service.listPolicies(did), service.listJobs(did), service.listYieldReports(did), exceptions, exceptionsAvailable))
       }
       if (req.method === 'GET' && url.pathname === '/account/delete') {
         return send(res, 200, deleteAccountPage(account, csrf, privacy.standing(did)))
@@ -465,21 +494,22 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         const { job, items } = service.jobDetails(did, jobMatch[1]!)
         return send(res, 200, jobPage(account, csrf, job, items))
       }
-      return send(res, 404, page('Not found', '<h1>Page not found</h1>'))
+      return send(res, 404, page('Not found', '<section class="title"><div><h1>Page not found</h1><p><a href="/">Back to sign in</a></p></div></section>'))
     } catch (error) {
       db.audit(did || null, 'request_refused', {
         path: url.pathname,
         reason: url.pathname === '/oauth/callback' ? oauthFailureCategory(error) : safeError(error),
       })
       if (error instanceof Error && error.message === 'resource not found') {
-        return send(res, 404, page('Not found', '<h1>Page not found</h1>', account, csrf))
+        return send(res, 404, page('Not found', '<section class="title"><div><h1>Page not found</h1><p>That page has gone, or it never existed.</p><p><a class="button" href="/app">Back to dashboard</a></p></div></section>', account, csrf))
       }
       const status = error instanceof CapacityError ? 429 : 400
       if (error instanceof CapacityError) res.setHeader('Retry-After', String(error.retryAfterSeconds))
       const message = url.pathname === '/oauth/callback'
-        ? 'Sign-in could not be completed. Return to sign in and try again.'
+        ? 'Sign-in didn’t go through. Head back and try again.'
+        : error instanceof CapacityError ? 'A lot of people are using the beta right now. Nothing was changed — try again in a few minutes.'
         : safeError(error)
-      return send(res, status, page('Could not complete request', `<h1>${error instanceof CapacityError ? 'The beta is temporarily at capacity' : 'Could not complete that request'}</h1><p>${h(message)}</p><p><a href="${session ? '/app' : '/'}">Go back</a></p>`, account, csrf))
+      return send(res, status, page('Something went wrong', `<section class="title"><div><h1>${error instanceof CapacityError ? 'Too busy right now' : 'That didn’t work'}</h1><p>${h(message)}</p><p><a class="button" href="${session ? '/app' : '/'}">Go back</a></p></div></section>`, account, csrf))
     }
   })
   server.on('close', () => privacy.close())

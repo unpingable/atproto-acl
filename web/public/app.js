@@ -14,12 +14,12 @@ const skip = document.querySelector('.skip')
 skip?.addEventListener('click', () => document.querySelector('#content')?.focus())
 
 const hints = {
-  feeds: 'Combines recent authors from your Timeline and Discover feed. Accounts you follow are held for a separate review.',
-  timeline: 'Includes authors who appear in your recent home timeline, whether or not you follow them.',
-  labeled_stream: 'Scans Cornell’s public label catalog in bounded pages. The publisher may expose only part of its history.',
-  follows: 'Checks only accounts you follow and keeps every match in a separate cleanup review.',
-  explicit_dids: 'Checks only the handles or DIDs you enter.',
-  external_snapshot: 'Fetches the current top 38 from bsky38.com. Membership can change between previews.',
+  feeds: 'Everyone whose posts turned up in your Following and Discover feeds, including through reposts and quotes. People you follow are listed separately.',
+  timeline: 'Everyone whose posts turned up in your Following feed, whether or not you follow them.',
+  labeled_stream: 'Every account Cornell has published data about, not just ones in your feed. Their list may only go back so far.',
+  follows: 'Only accounts you already follow. Every match is kept in its own list.',
+  explicit_dids: 'Only the accounts you type in below.',
+  external_snapshot: 'The current top 38 on bsky38.com. Who’s on it changes between scans.',
 }
 
 function updatePolicySummary() {
@@ -41,19 +41,19 @@ function updatePolicySummary() {
     subjects.setCustomValidity(specific && !subjects.value.trim() ? 'Enter at least one account handle or DID.' : '')
   }
   const choices = []
-  if (monthly?.checked) choices.push('averaging more than 20 posts a day this month')
-  if (daily?.checked) choices.push('making both more than 30 posts and more than 30 replies yesterday')
-  monthly?.setCustomValidity(!bsky38 && choices.length === 0 ? 'Choose at least one activity label condition.' : '')
+  if (monthly?.checked) choices.push('averages more than 20 posts a day this month')
+  if (daily?.checked) choices.push('posted more than 30 times and replied more than 30 times yesterday')
+  monthly?.setCustomValidity(!bsky38 && choices.length === 0 ? 'Tick at least one condition.' : '')
   if (bsky38) {
-    summary.textContent = 'Suggest muting accounts included in the current Bsky38 leaderboard snapshot.'
+    summary.textContent = 'Suggests muting the accounts in the current Bsky38 leaderboard.'
     return
   }
-  const scope = kind === 'follows' ? 'you follow' : kind === 'feeds' ? 'appearing in your Timeline and Discover feeds' : kind === 'timeline' ? 'appearing in your recent timeline' :
-    kind === 'labeled_stream' ? 'found in Cornell’s public label catalog' : 'you list'
-  const prefix = specific ? `Check the specific accounts ${scope}.` : kind === 'labeled_stream' ?
-    `Scan up to ${limit?.value || '…'} public Cornell label records and check the accounts they name.` :
-    `Check up to ${limit?.value || '…'} accounts ${scope}.`
-  summary.textContent = `${prefix} ${choices.length ? `Suggest muting accounts Cornell labels as ${choices.join(' or ')}.` : 'Choose at least one condition.'}`
+  const scope = kind === 'follows' ? 'accounts you follow' : kind === 'feeds' ? 'accounts from your Following and Discover feeds' : kind === 'timeline' ? 'accounts from your recent Following feed' :
+    kind === 'labeled_stream' ? 'accounts from Cornell’s public list' : 'accounts you listed'
+  const prefix = specific ? `Checks the ${scope}.` : kind === 'labeled_stream' ?
+    `Reads up to ${limit?.value || '…'} entries from Cornell’s public list and checks the accounts named there.` :
+    `Checks up to ${limit?.value || '…'} ${scope}.`
+  summary.textContent = `${prefix} ${choices.length ? `Suggests muting anyone who ${choices.join(' or ')}.` : 'Tick at least one condition below.'}`
 }
 
 for (const control of [source, limit, subjects, monthly, daily]) control?.addEventListener('input', updatePolicySummary)
@@ -79,8 +79,8 @@ for (const form of longRunningForms) {
       busy.setAttribute('aria-live', 'assertive')
       const measurement = form.getAttribute('action') === '/diagnostics/yield'
       busy.innerHTML = measurement
-        ? '<span class="busy-spinner" aria-hidden="true"></span><div><strong>Starting a fresh measurement…</strong><p>You’ll be taken to a progress page. You can return to the dashboard while the read-only check continues.</p></div>'
-        : '<span class="busy-spinner" aria-hidden="true"></span><div><strong>Building a fresh result…</strong><p>Please keep this page open and do not refresh. This can take a moment while account sources and evidence are checked.</p></div>'
+        ? '<span class="busy-spinner" aria-hidden="true"></span><div><strong>Reading your feeds…</strong><p>You’ll be taken to a progress page. It keeps going if you go back to the dashboard, and it changes nothing.</p></div>'
+        : '<span class="busy-spinner" aria-hidden="true"></span><div><strong>Scanning your feed…</strong><p>Hang on and don’t refresh — this takes a moment while your feeds and the posting data are read. Nothing is being changed.</p></div>'
       document.body.append(busy)
     }
     busy.hidden = false
@@ -155,12 +155,30 @@ if (document.querySelector('#job-refresh[data-auto-refresh="true"]')) {
   window.setTimeout(() => window.location.reload(), 3000)
 }
 
+const approvalForms = [...document.querySelectorAll('form.result-group')]
+
+function refreshApproval(form) {
+  const button = form.querySelector('[data-approve]')
+  if (!button) return
+  const selected = form.querySelectorAll('input[type="checkbox"][name="subject"]:checked').length
+  const verb = button.dataset.approve
+  button.textContent = selected ? `${verb} ${selected} account${selected === 1 ? '' : 's'}` : `${verb} selected`
+  button.disabled = selected === 0
+  button.title = selected ? '' : 'Tick at least one account first.'
+}
+
+for (const form of approvalForms) {
+  form.addEventListener('change', () => refreshApproval(form))
+  refreshApproval(form)
+}
+
 for (const button of document.querySelectorAll('[data-select]')) {
   button.addEventListener('click', () => {
     const form = button.closest('form')
     for (const checkbox of form?.querySelectorAll('input[type="checkbox"][name="subject"]') || []) {
       checkbox.checked = button.dataset.select === 'all'
     }
+    if (form) refreshApproval(form)
   })
 }
 

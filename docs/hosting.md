@@ -51,13 +51,13 @@ npm run ops -- /path/to/state/app.db admissions disable operator "capacity revie
 npm run ops -- /path/to/state/app.db writes disable operator "emergency stop"
 npm run ops -- /path/to/state/app.db writes enable operator "incident resolved"
 npm run ops -- /path/to/state/app.db resume job_identifier
-npm run ops -- /path/to/state/app.db invite create 14
 npm run ops -- /path/to/state/app.db account-writes did:example:account enable
 ```
 
-Enabling writes changes only the gate. Use `resume` separately for each paused
-job. The command refuses expired approvals. Invite plaintext is displayed once;
-deliver it through the chosen private channel and do not put it in logs.
+The hosted limited preview uses `ATPROTO_ACL_ADMISSION_MODE=open`; no invite code is
+required. Account writes default off for newly admitted accounts. Enabling writes
+changes only the gate. Use `resume` separately for each paused job; the command
+refuses expired approvals.
 
 ## Backup
 

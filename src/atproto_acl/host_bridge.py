@@ -133,6 +133,15 @@ def _override(message):
         state.close()
 
 
+def _list_overrides(message):
+    state = Store(message["state"], message["account"], "live")
+    try:
+        with state.lock():
+            return {kind: sorted(values) for kind, values in state.overrides().items()}
+    finally:
+        state.close()
+
+
 def _begin(message):
     state = Store(message["state"], message["account"], "live")
     try:
@@ -168,6 +177,8 @@ def handle(message):
         return _preview(message)
     if command == "override":
         return _override(message)
+    if command == "list_overrides":
+        return _list_overrides(message)
     if command == "begin_action":
         return _begin(message)
     if command == "finish_action":
