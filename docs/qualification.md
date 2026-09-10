@@ -29,8 +29,10 @@ separately from fixtures.
 
 The open limited preview is qualified in Firefox. Chrome OAuth remains a public-beta
 blocker until a current release completes the full sign-in and return journey.
-Self-hosted PDS compatibility is useful additional evidence but is not inferred
-from accounts hosted on different Bluesky-operated PDS instances.
+A real self-hosted-PDS account has completed OAuth and established an application
+session. Its first fresh scan was blocked by the release's missing Python bridge,
+so this is partial portability evidence rather than qualified scanning support;
+repeat the read-only scan after deploying the corrected artifact contract.
 
 ## Publication gate
 
@@ -40,3 +42,8 @@ Chrome OAuth, multi-user isolation, deletion-through-restore behavior, global ca
 controls, the immediate write gate, and one bounded mute/readback/reviewed-release
 lifecycle. The repository is public; open-preview admission remains a separate control
 and does not grant new accounts moderation-write access.
+
+Every deployed candidate must also complete the fresh-account journey from the
+operator guide: initial read-only OAuth, creation and validation of a new policy,
+preview, and authoritative override read. Preserved accounts and policies do not
+exercise enough of the release boundary to satisfy this gate.

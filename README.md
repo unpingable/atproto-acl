@@ -8,7 +8,9 @@ result before anything changes.
 The hosted beta is at [atproto-acl.neutral.zone](https://atproto-acl.neutral.zone).
 The hosted service is an open limited preview: anyone with the URL can sign in, scan,
 and preview. New accounts cannot make moderation changes unless the operator enables
-writes for that DID. Chrome OAuth remains under qualification.
+writes for that DID. Initial OAuth is read-only; an enabled account must reconnect
+and explicitly grant mute and unmute authority before the worker can act. Chrome
+OAuth remains under qualification.
 
 ## What it does
 

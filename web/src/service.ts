@@ -1,7 +1,7 @@
 import { id, sha, AppDb, asJson } from './db.js'
 import { Engine, stableHash } from './engine.js'
 import type { AccountProvider, Acquisition, FeedExposure, Receipt, ReceiptRow } from './types.js'
-import { BSKY38_URL, fetchBsky38, type Bsky38Member } from './bsky38.js'
+import { BSKY38_URL, fetchBsky38, type Bsky38Members } from './bsky38.js'
 import { ServiceControls } from './controls.js'
 
 const now = () => new Date().toISOString()
@@ -28,7 +28,7 @@ export class AclService {
     readonly engine: Engine,
     readonly accounts: AccountProvider,
     readonly fixtureAcquisition?: (did: string, policyBody: string) => Partial<Acquisition>,
-    readonly bsky38: () => Promise<Bsky38Member[]> = fetchBsky38,
+    readonly bsky38: () => Promise<Bsky38Members> = fetchBsky38,
     readonly controls?: ServiceControls,
   ) {}
 
@@ -52,7 +52,7 @@ export class AclService {
       }
       return { ...data, acquisition_hash: stableHash(data) }
     }
-    const config = validatedConfig ?? (await this.engine.validate(policyBody)).config
+    const config = validatedConfig ?? (await this.engine.validate(policyBody, did)).config
     const client = await this.accounts.restore(did)
     // The declared acquisition maxima require up to 10 feed pages, 34
     // relationship batches, 40 profile batches, and 50 mute-list pages. Keep
@@ -166,7 +166,9 @@ export class AclService {
         suppliedEvidence = true
         const retrievedAt = new Date()
         try {
-          const members = (await this.bsky38()).slice(0, Math.min(Number(source.limit ?? 38), 38))
+          const snapshot = await this.bsky38()
+          const retrievalDigest = snapshot.retrievalDigest ?? stableHash(snapshot)
+          const members = snapshot.slice(0, Math.min(Number(source.limit ?? 38), 38))
           const expiresAt = new Date(retrievedAt.getTime() + 60 * 60 * 1000).toISOString()
           for (const member of members) {
             subjects.add(member.did)
@@ -183,6 +185,7 @@ export class AclService {
           }
           discovery.push({ subjects: members.map(item => item.did), complete: members.length === 38,
             source: 'external_snapshot', source_url: BSKY38_URL, retrieved_at: retrievedAt.toISOString(), members,
+            retrieval_digest: retrievalDigest, authentication: 'none',
             reason: members.length === 38 ? '' : 'leaderboard snapshot did not contain 38 accounts' })
         } catch {
           discovery.push({ subjects: [], complete: false, source: 'external_snapshot', source_url: BSKY38_URL,
@@ -279,7 +282,7 @@ export class AclService {
       .get(policyId, did) as Record<string, unknown> | undefined
     if (!policy) throw new Error('policy not found')
     const body = String(policy.body)
-    const validated = await this.engine.validate(body)
+    const validated = await this.engine.validate(body, did)
     const acquisition = await this.acquire(did, body, fixture, validated.config)
     let receipt = await this.engine.preview(String(policy.body), did, acquisition, evaluationTime, deadline - Date.now())
     if (!fixture && !this.fixtureAcquisition) {
@@ -314,7 +317,7 @@ export class AclService {
   }
 
   async startFeedYield(did: string, policyBody: string) {
-    const validated = await this.engine.validate(policyBody)
+    const validated = await this.engine.validate(policyBody, did)
     const lease = await this.controls?.beginAcquisition(did)
     const reportId = id('yield')
     const startedAt = now()

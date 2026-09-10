@@ -9,7 +9,7 @@
 - [x] Verify restore-after-deletion suppression across every retained backup
   generation in the controlled restore fixture.
 - [ ] Complete a bounded mute, confirmed readback, reviewed release, and unmute.
-- [ ] Publish a clean-root repository and verify its post-publication security
+- [x] Publish a clean-root repository and verify its post-publication security
   settings and artifacts.
 - [ ] Verify the support contact and approve the immutable launch packet.
 

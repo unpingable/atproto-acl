@@ -21,11 +21,41 @@ export class ServiceControls {
   }
 
   requireAdmission() {
+    if (Number(this.state().maintenance_enabled)) throw new CapacityError(60)
     if (!Number(this.state().admissions_enabled)) throw new CapacityError(300)
   }
 
   requireWrite() {
+    if (Number(this.state().maintenance_enabled)) throw new Error('service maintenance is active')
     if (!Number(this.state().writes_enabled)) throw new Error('moderation writes are paused by the operator')
+  }
+
+  begin(did: string) {
+    return this.db.transaction(() => {
+      if (Number(this.state().maintenance_enabled)) {
+        const draining = this.db.sql.prepare(`SELECT 1 FROM capacity_events
+          WHERE did=? AND kind IN ('acquisition','effect') AND status IN ('running','attempting') LIMIT 1`).get(did)
+        if (!draining) throw new CapacityError(60)
+      }
+      this.db.sql.prepare("UPDATE capacity_events SET status='capacity_expired',finished_at=? WHERE kind='bridge' AND status='running' AND created_at<?")
+        .run(now(), ago(15 * 60 * 1000))
+      const global = this.db.sql.prepare("SELECT count(*) count FROM capacity_events WHERE kind='bridge' AND status='running'")
+        .get() as { count: number }
+      const own = this.db.sql.prepare("SELECT count(*) count FROM capacity_events WHERE kind='bridge' AND status='running' AND did=?")
+        .get(did) as { count: number }
+      if (global.count >= this.config.bridgeConcurrencyGlobal || own.count >= this.config.bridgeConcurrencyPerDid) {
+        throw new CapacityError(30)
+      }
+      const token = id('bridge')
+      this.db.sql.prepare("INSERT INTO capacity_events(id,did,kind,status,created_at) VALUES(?,?,'bridge','running',?)")
+        .run(token, did, now())
+      return token
+    })
+  }
+
+  finish(token: string) {
+    this.db.sql.prepare("UPDATE capacity_events SET status='completed',finished_at=? WHERE id=? AND kind='bridge'")
+      .run(now(), token)
   }
 
   requireAccountWrite(did: string) {

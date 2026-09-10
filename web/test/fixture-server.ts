@@ -8,6 +8,7 @@ import { createApp } from '../src/server.js'
 import { AclService } from '../src/service.js'
 import { Worker } from '../src/worker.js'
 import { ServiceControls } from '../src/controls.js'
+import { READ_OAUTH_SCOPE, WRITE_OAUTH_SCOPE } from '../src/oauth.js'
 import { acquisition, FakeAccounts, observations } from './fixtures.js'
 
 const dir = mkdtempSync(join(tmpdir(), 'acl-browser-'))
@@ -105,13 +106,12 @@ const service = new AclService(db, new Engine(config), accounts,
 const auth = Object.assign(accounts, {
   metadata: { client_id: config.origin + '/oauth-client-metadata.json', fixture: true },
   jwks: { keys: [] },
-  authorize: async (handle: string, state: string) => new URL(`/oauth/callback?code=${encodeURIComponent(handle)}&state=${encodeURIComponent(state)}`, config.origin),
+  authorize: async (handle: string, state: string, writeAccess = false) => new URL(`/oauth/callback?code=${encodeURIComponent(handle)}&state=${encodeURIComponent(state)}&access=${writeAccess ? 'write' : 'read'}`, config.origin),
   callback: async (params: URLSearchParams) => {
     const profile = [...accounts.profiles.values()].find(item => item.handle === params.get('code'))
     if (!profile) throw new Error('fixture account not found')
-    if (accounts.revoked.delete(profile.did)) {
-      profile.scopes = ['rpc?lxm=app.bsky.feed.getFeedSkeleton&aud=did:web:api.bsky.app%23bsky_appview']
-    }
+    accounts.revoked.delete(profile.did)
+    profile.scopes = (params.get('access') === 'write' ? WRITE_OAUTH_SCOPE : READ_OAUTH_SCOPE).split(' ')
     return { session: { did: profile.did }, state: params.get('state') }
   },
 })

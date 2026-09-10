@@ -56,13 +56,19 @@ npm run ops -- /path/to/state/app.db account-writes did:example:account enable
 
 The hosted limited preview uses `ATPROTO_ACL_ADMISSION_MODE=open`; no invite code is
 required. Account writes default off for newly admitted accounts. Enabling writes
-changes only the gate. Use `resume` separately for each paused job; the command
-refuses expired approvals.
+changes only the local gate. The user must then reconnect and explicitly grant the
+mute and unmute OAuth scopes; the worker requires both that write-capable session
+and the durable local gate. Use `resume` separately for each paused job; the
+command refuses expired approvals.
 
 ## Backup
 
-Create a consistent SQLite snapshot with the supplied backup tool and copy each
-per-user engine database while holding its file lock. Encrypt backups at rest,
+The supplied backup tool first establishes a durable maintenance lease, refuses
+new acquisition, bridge, and effect work, and waits for in-flight operations to
+finish. It then snapshots the application database and each per-user engine
+database while holding its file lock as one application-consistent generation.
+The lease is cleared from both the live service and the restorable snapshot.
+Encrypt backups at rest,
 restrict them to the operator, verify their checksums and SQLite integrity, and
 expire every ordinary generation within 30 days.
 
@@ -103,8 +109,16 @@ traffic.
 
 Build and test off-host. Record source revision, artifact digest, dependency lock,
 configuration schema, migration, and backup generation in the launch packet.
-Install the candidate alongside the previous release, move the selector, restart
-web and worker, and check readiness plus OAuth metadata.
+Install the candidate alongside the previous release, run `deploy/prepare-release.sh`
+against that immutable directory, and set `ATPROTO_ACL_PYTHON` to the selected
+release's `venv/bin/python`. Verify the resolved interpreter in both the web and
+worker service environments before moving the selector and restarting them.
+
+After checking readiness and OAuth metadata, sign in with a non-operator acceptance
+account, create and save a new synthetic policy, and run a read-only preview from
+that newly saved revision. Preserved policies do not satisfy this check because
+they may not exercise the Node-to-Python validation bridge. Keep moderation writes
+disabled throughout this acceptance step.
 
 Rollback selects the previous compatible release and restarts the services. It
 never rolls back remote moderation state. If a database migration is not backward

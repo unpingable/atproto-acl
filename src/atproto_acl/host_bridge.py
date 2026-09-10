@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import platform
 import sys
 
+from . import __version__
 from .labels import LabelProvider
 from .model import Coverage, EvidenceSet, Observation, utcnow
 from .network import Client, NetworkError
@@ -169,6 +171,13 @@ def _finish(message):
 
 def handle(message):
     command = message.get("command")
+    if command == "health":
+        return {
+            "bridge_schema": 1,
+            "package_version": __version__,
+            "python_version": platform.python_version(),
+            "state_schema": 1,
+        }
     if command == "validate":
         policy = compile_policy(message["policy"])
         return {"policy_hash": policy.policy_hash, "source_hash": policy.source_hash,

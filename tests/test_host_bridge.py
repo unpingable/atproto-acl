@@ -104,3 +104,11 @@ def test_host_preview_preserves_feed_exposure_follow_review_boundary(tmp_path):
     message["remote"]["did:plc:subject"]["relationship"] = None
     with pytest.raises(Exception, match="remote relationship"):
         handle(message)
+
+
+def test_host_bridge_health_identifies_protocol_and_runtime():
+    health = handle({"command": "health"})
+    assert health["bridge_schema"] == 1
+    assert health["state_schema"] == 1
+    assert health["package_version"] == "0.2.0"
+    assert health["python_version"]

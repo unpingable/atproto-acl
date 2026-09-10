@@ -106,7 +106,8 @@ export type Receipt = {
   evidence: Array<{ evidence_id?: string; provider?: string; property?: string; observed_at: string; expires_at?: string; [key: string]: unknown }>
   coverage?: Array<{ provider: string; subject: string; complete: boolean; reason?: string; checked_at?: string }>
   discovery?: Array<{ source: string; subjects?: string[]; complete: boolean; reason?: string;
-    source_url?: string; retrieved_at?: string; members?: Array<Record<string, unknown>> }>
+    source_url?: string; retrieved_at?: string; retrieval_digest?: string; authentication?: string;
+    members?: Array<Record<string, unknown>> }>
   completeness?: Record<string, boolean>
   rows: ReceiptRow[]
   [key: string]: unknown

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 export const BSKY38_URL = 'https://bsky38.com/'
 
 export type Bsky38Member = {
@@ -7,6 +9,7 @@ export type Bsky38Member = {
   handle: string
   displayName: string
 }
+export type Bsky38Members = Bsky38Member[] & { retrievalDigest?: string }
 
 const decode = (value: string) => JSON.parse(`"${value}"`) as string
 
@@ -30,7 +33,7 @@ export function parseBsky38(html: string): Bsky38Member[] {
   return members
 }
 
-export async function fetchBsky38(): Promise<Bsky38Member[]> {
+export async function fetchBsky38(): Promise<Bsky38Members> {
   const response = await fetch(BSKY38_URL, {
     redirect: 'error', signal: AbortSignal.timeout(10_000),
     headers: { Accept: 'text/html' },
@@ -55,5 +58,7 @@ export async function fetchBsky38(): Promise<Bsky38Member[]> {
   const bytes = new Uint8Array(size)
   let offset = 0
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-  return parseBsky38(new TextDecoder('utf-8', { fatal: true }).decode(bytes))
+  const members = parseBsky38(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as Bsky38Members
+  members.retrievalDigest = createHash('sha256').update(bytes).digest('hex')
+  return members
 }

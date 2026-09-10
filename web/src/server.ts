@@ -1,11 +1,11 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadConfig, type Config } from './config.js'
 import { AppDb, asJson, sha } from './db.js'
-import { Engine } from './engine.js'
+import { BridgeCapacityError, Engine, PolicyServiceUnavailableError, PolicyValidationError } from './engine.js'
 import { dashboard, deleteAccountPage, deletedAccountPage, exposureDetails, h, helpPage, jobPage, landing, page, policyEditor, previewPage, privacyPage,
   profileUrl, safeAvatarUrl } from './html.js'
 import { hasRpcPermission, OAuthAccounts } from './oauth.js'
@@ -18,10 +18,17 @@ import { AdmissionManager, oauthFailureCategory } from './admission.js'
 import { PrivacyManager } from './privacy.js'
 
 type Auth = AccountProvider & {
-  authorize(handle: string, state: string): Promise<URL>
+  authorize(handle: string, state: string, writeAccess?: boolean): Promise<URL>
   callback(params: URLSearchParams): Promise<{ session: { did: string }; state?: string | null }>
   metadata: unknown
   jwks: unknown
+}
+
+class RequestError extends Error {
+  constructor(message: string, readonly status = 400) {
+    super(message)
+    this.name = 'RequestError'
+  }
 }
 
 const cookies = (req: IncomingMessage) => Object.fromEntries(
@@ -37,7 +44,7 @@ async function body(req: IncomingMessage) {
   let raw = ''
   for await (const chunk of req) {
     raw += chunk
-    if (raw.length > 256 * 1024) throw new Error('form is too large')
+    if (raw.length > 256 * 1024) throw new RequestError('The submitted form is too large.', 413)
   }
   return new URLSearchParams(raw)
 }
@@ -73,11 +80,6 @@ function validLoginToken(config: Config, value: string) {
   let actual: Buffer
   try { actual = Buffer.from(value.slice(at + 1), 'base64url') } catch { return false }
   return actual.length === expected.length && timingSafeEqual(actual, expected)
-}
-
-function safeError(error: unknown) {
-  const message = error instanceof Error ? error.message : 'request failed'
-  return message.replace(/https?:\/\/\S+/g, 'remote service').slice(0, 240)
 }
 
 function yieldReportPage(
@@ -220,10 +222,14 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         return Array.isArray(value) ? value.map(String) : []
       } catch { return [] }
     })() : []
+    const localWritesEnabled = session ? controls.accountWritesEnabled(did) : false
+    const writeScopeGranted = hasRpcPermission(grantedScopes, 'app.bsky.graph.muteActor') &&
+      hasRpcPermission(grantedScopes, 'app.bsky.graph.unmuteActor')
     const account = session ? {
       did, handle: String(session.handle), pds: String(session.pds ?? ''),
-      reconnectRequired: !hasRpcPermission(grantedScopes, 'app.bsky.feed.getFeedSkeleton'),
-      writesEnabled: controls.accountWritesEnabled(did),
+      reconnectRequired: !hasRpcPermission(grantedScopes, 'app.bsky.feed.getFeed'),
+      writeReconnectRequired: localWritesEnabled && !writeScopeGranted,
+      writesEnabled: localWritesEnabled && writeScopeGranted,
     } : undefined
     const csrf = jar.acl_csrf ?? ''
     try {
@@ -232,6 +238,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         db.sql.prepare('SELECT 1').get()
         controls.state()
         privacy.assertReady()
+        await service.engine.health()
         return send(res, 200, '{"status":"ready"}', 'application/json')
       }
       if (req.method === 'GET' && url.pathname === '/app.css') return send(res, 200, css, 'text/css; charset=utf-8')
@@ -257,7 +264,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           const token = form.get('login_token') ?? ''
           if (!validLoginToken(config, token)) return send(res, 403, page('Request refused', '<section class="title"><div><h1>That sign-in link expired</h1><p>Start again from the sign-in page.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
           const handle = (form.get('handle') ?? '').trim().replace(/^@/, '')
-          if (!/^[a-zA-Z0-9.-]{3,253}$/.test(handle)) throw new Error('enter a valid account handle')
+          if (!/^[a-zA-Z0-9.-]{3,253}$/.test(handle)) throw new RequestError('Enter a valid account handle.')
           const attempt = admissions.begin({ inviteCode: form.get('invite_code') ?? undefined })
           const target = await auth.authorize(handle, attempt.state)
           return redirect(res, target.toString())
@@ -271,7 +278,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         }
         if (url.pathname === '/reconnect') {
           const attempt = admissions.begin({ kind: 'reconnect', expectedDid: did })
-          const target = await auth.authorize(account!.handle, attempt.state)
+          const target = await auth.authorize(account!.handle, attempt.state, localWritesEnabled)
           db.transaction(() => {
             db.sql.prepare('UPDATE users SET connected=0,updated_at=? WHERE did=?').run(new Date().toISOString(), did)
             db.sql.prepare("UPDATE jobs SET cancel_requested=1,status=CASE WHEN status='queued' THEN 'disconnected' ELSE status END,updated_at=? WHERE did=? AND status IN ('queued','running')")
@@ -286,7 +293,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         }
         if (url.pathname === '/policies/save') {
           const name = (form.get('name') ?? '').trim()
-          if (!name || name.length > 80) throw new Error('policy name is required')
+          if (!name || name.length > 80) throw new RequestError('A policy name is required.')
           const existing = form.get('id') || undefined
           const editor = form.get('after') === 'preview' ? 'guided' : form.get('editor')
           const draft: GuidedPolicy = {
@@ -302,7 +309,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           try {
             if (editor === 'guided') {
               if (draft.sourceType === 'explicit_dids') {
-                if (!draft.subjects.length) throw new Error('Enter at least one account handle or DID.')
+                if (!draft.subjects.length) throw new RequestError('Enter at least one account handle or DID.')
                 const resolved = await (await service.accounts.restore(did)).resolve(draft.subjects)
                 draft.subjects = [...new Set(draft.subjects.map(actor => resolved[actor]))]
               }
@@ -311,9 +318,10 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
                 monthly: draft.monthly, dailyPair: draft.dailyPair,
               })
             }
-            await service.engine.validate(policyBody)
+            await service.engine.validate(policyBody, did)
           } catch (error) {
-            const message = safeError(error).replace(/^PolicyError:\s*/, '')
+            if (!(error instanceof PolicyValidationError) && !(error instanceof RequestError)) throw error
+            const message = error.message
             return send(res, 400, policyEditor(account!, csrf, { id: existing, name, body: policyBody }, message,
               editor === 'guided' ? draft : undefined))
           }
@@ -336,15 +344,20 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         }
         const approveMatch = url.pathname.match(/^\/previews\/([^/]+)\/approve$/)
         if (approveMatch) {
+          if (!account?.writesEnabled) {
+            throw new RequestError(account?.writeReconnectRequired
+              ? 'Reconnect and grant moderation access before approving changes.'
+              : 'Moderation changes are not enabled for this preview account.', 403)
+          }
           const kind = form.get('kind')
-          if (kind !== 'apply' && kind !== 'apply_followed' && kind !== 'release') throw new Error('choose an approval type')
+          if (kind !== 'apply' && kind !== 'apply_followed' && kind !== 'release') throw new RequestError('Choose an approval type.')
           const job = service.approve(did, approveMatch[1]!, kind, form.getAll('subject'))
           return redirect(res, `/jobs/${job}`)
         }
         const recheckMatch = url.pathname.match(/^\/jobs\/([^/]+)\/recheck\/([^/]+)$/)
         if (recheckMatch) {
           const subject = decodeURIComponent(recheckMatch[2]!)
-          if (!/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new Error('invalid account DID')
+          if (!/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new RequestError('The account DID is invalid.')
           await service.recheckUncertain(did, recheckMatch[1]!, subject)
           return redirect(res, `/jobs/${recheckMatch[1]}`)
         }
@@ -360,11 +373,11 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           const actor = (form.get('subject') ?? '').trim().replace(/^@/, '')
           const kind = form.get('kind') ?? ''
           if (!actor || actor.length > 253 || !['exempt','allow','keep_muted'].includes(kind)) {
-            throw new Error('override requires an account and a supported kind')
+            throw new RequestError('Choose an account and a supported exception type.')
           }
           const resolved = await (await service.accounts.restore(did)).resolve([actor])
           const subject = resolved[actor]
-          if (!subject || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new Error('account could not be resolved to a DID')
+          if (!subject || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new RequestError('That account could not be resolved to a DID.')
           const enabled = form.get('enabled') === '1'
           await service.engine.override(did, subject, kind, enabled)
           try {
@@ -398,9 +411,9 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           return send(res, 200, page('Disconnected', '<section class="title"><div><h1>App disconnected</h1><p>This app can no longer read your feeds or change your mutes. Anyone you muted stays muted, and your policies and history are still here if you sign in again.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         }
         if (url.pathname === '/account/delete') {
-          if (form.get('confirm') !== 'delete') throw new Error('Confirm that you want to delete this account data.')
+          if (form.get('confirm') !== 'delete') throw new RequestError('Confirm that you want to delete this account data.')
           const mode = form.get('mode')
-          if (mode !== 'leave_mutes' && mode !== 'after_releases') throw new Error('Choose a supported deletion path.')
+          if (mode !== 'leave_mutes' && mode !== 'after_releases') throw new RequestError('Choose a supported deletion path.')
           const before = privacy.standing(did)
           if (mode === 'after_releases' && before.historicallyAttributedMutes) {
             return send(res, 409, deleteAccountPage(account!, csrf, before,
@@ -411,10 +424,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
             'An action is still finishing. No new actions will start; return after its outcome is recorded.'))
           try { await (await service.accounts.restore(did)).disconnect() } catch {}
           db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
-          try { privacy.completeDeletion(did) } catch (error) {
-            standing = privacy.standing(did)
-            return send(res, 409, deleteAccountPage(account!, csrf, standing, safeError(error)))
-          }
+          privacy.completeDeletion(did)
           res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
           return send(res, 200, deletedAccountPage())
         }
@@ -496,20 +506,40 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
       }
       return send(res, 404, page('Not found', '<section class="title"><div><h1>Page not found</h1><p><a href="/">Back to sign in</a></p></div></section>'))
     } catch (error) {
+      const notFound = error instanceof Error && error.message === 'resource not found'
+      const expected = notFound || error instanceof RequestError || error instanceof CapacityError ||
+        error instanceof BridgeCapacityError || error instanceof PolicyServiceUnavailableError
+      const referenceId = error instanceof PolicyServiceUnavailableError ? error.diagnosticId
+        : expected ? undefined : randomUUID()
+      if (referenceId && !(error instanceof PolicyServiceUnavailableError)) {
+        console.error(`[request:${referenceId}] ${req.method} ${url.pathname}`, error)
+      }
       db.audit(did || null, 'request_refused', {
         path: url.pathname,
-        reason: url.pathname === '/oauth/callback' ? oauthFailureCategory(error) : safeError(error),
+        reason: url.pathname === '/oauth/callback' ? oauthFailureCategory(error)
+          : error instanceof RequestError ? 'invalid_request'
+          : error instanceof CapacityError || error instanceof BridgeCapacityError ? 'capacity'
+          : error instanceof PolicyServiceUnavailableError ? 'policy_service_unavailable'
+          : 'internal_error',
+        reference_id: referenceId,
       })
-      if (error instanceof Error && error.message === 'resource not found') {
+      if (notFound) {
         return send(res, 404, page('Not found', '<section class="title"><div><h1>Page not found</h1><p>That page has gone, or it never existed.</p><p><a class="button" href="/app">Back to dashboard</a></p></div></section>', account, csrf))
       }
-      const status = error instanceof CapacityError ? 429 : 400
-      if (error instanceof CapacityError) res.setHeader('Retry-After', String(error.retryAfterSeconds))
+      const status = error instanceof CapacityError || error instanceof BridgeCapacityError ? 429
+        : error instanceof RequestError ? error.status
+        : error instanceof PolicyServiceUnavailableError ? 503
+        : 500
+      if (error instanceof CapacityError || error instanceof BridgeCapacityError) {
+        res.setHeader('Retry-After', String(error.retryAfterSeconds))
+      }
       const message = url.pathname === '/oauth/callback'
-        ? 'Sign-in didn’t go through. Head back and try again.'
+        ? `Sign-in didn’t go through. Head back and try again.${referenceId ? ` Reference ID: ${referenceId}.` : ''}`
         : error instanceof CapacityError ? 'A lot of people are using the beta right now. Nothing was changed — try again in a few minutes.'
-        : safeError(error)
-      return send(res, status, page('Something went wrong', `<section class="title"><div><h1>${error instanceof CapacityError ? 'Too busy right now' : 'That didn’t work'}</h1><p>${h(message)}</p><p><a class="button" href="${session ? '/app' : '/'}">Go back</a></p></div></section>`, account, csrf))
+        : error instanceof BridgeCapacityError ? error.message
+        : error instanceof RequestError || error instanceof PolicyServiceUnavailableError ? error.message
+        : `Something went wrong. Reference ID: ${referenceId}.`
+      return send(res, status, page('Something went wrong', `<section class="title"><div><h1>${error instanceof CapacityError || error instanceof BridgeCapacityError ? 'Too busy right now' : 'That didn’t work'}</h1><p>${h(message)}</p><p><a class="button" href="${session ? '/app' : '/'}">Go back</a></p></div></section>`, account, csrf))
     }
   })
   server.on('close', () => privacy.close())
@@ -519,10 +549,16 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const config = loadConfig()
   const db = new AppDb(join(config.dataDir, 'app.db'))
+  const controls = new ServiceControls(db, config)
+  const engine = new Engine(config, controls)
+  await engine.health(true)
+  if (process.env.ATPROTO_ACL_STARTUP_CHECK === '1') {
+    db.close()
+    process.exit(0)
+  }
   const oauth = await OAuthAccounts.create(config, db)
   const auth = Object.assign(oauth, { metadata: oauth.oauth.clientMetadata, jwks: oauth.oauth.jwks }) as Auth
-  const controls = new ServiceControls(db, config)
-  const service = new AclService(db, new Engine(config), oauth, undefined, undefined, controls)
+  const service = new AclService(db, engine, oauth, undefined, undefined, controls)
   const server = await createApp(config, db, service, auth)
   const worker = new Worker(db, service, undefined, controls)
   if (config.workerEnabled) worker.loop().catch(() => process.exitCode = 1)
