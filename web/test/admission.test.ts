@@ -68,7 +68,9 @@ test('invite attempts expire and cannot be replayed', () => {
 test('signed application state rejects modification', () => {
   const { db, admissions } = setup('open')
   const attempt = admissions.begin({}, at)
-  const altered = attempt.state.slice(0, -1) + (attempt.state.endsWith('A') ? 'B' : 'A')
+  const pieces = attempt.state.split('.')
+  pieces[2] = (pieces[2]!.startsWith('A') ? 'B' : 'A') + pieces[2]!.slice(1)
+  const altered = pieces.join('.')
   assert.throws(() => admissions.complete(altered, 'did:plc:user', at), /invalid/)
   assert.equal(admissions.complete(attempt.state, 'did:plc:user', at).source, 'open')
   db.close()
