@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import closing
 import fcntl
 import hashlib
 import json
@@ -14,15 +15,30 @@ import time
 
 def backup_db(source: Path, target: Path):
     target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with sqlite3.connect(source) as src, sqlite3.connect(target) as dst:
+    with closing(sqlite3.connect(source)) as src, closing(sqlite3.connect(target)) as dst:
         src.backup(dst)
         if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise RuntimeError(f"integrity check failed for {source.name}")
     os.chmod(target, 0o600)
 
 
+def seal_db(path: Path):
+    """Make the snapshot a single immutable database file before hashing."""
+    with closing(sqlite3.connect(path, isolation_level=None)) as db:
+        db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        mode = db.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
+        if mode.lower() != "delete":
+            raise RuntimeError(f"could not seal {path.name}: journal mode is {mode}")
+        if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise RuntimeError(f"integrity check failed for {path.name}")
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists():
+            raise RuntimeError(f"could not seal {path.name}: mutable {sidecar.name} remains")
+
+
 def begin_maintenance(app: Path, timeout: int):
-    with sqlite3.connect(app, isolation_level=None) as db:
+    with closing(sqlite3.connect(app, isolation_level=None)) as db:
         columns = {row[1] for row in db.execute("PRAGMA table_info(service_controls)")}
         if "maintenance_enabled" not in columns:
             raise RuntimeError("application schema does not support consistent online backup")
@@ -36,7 +52,7 @@ def begin_maintenance(app: Path, timeout: int):
     try:
         deadline = time.monotonic() + timeout
         while True:
-            with sqlite3.connect(app) as db:
+            with closing(sqlite3.connect(app)) as db:
                 active = db.execute(
                     "SELECT kind,count(*) FROM capacity_events "
                     "WHERE status IN ('running','attempting') AND kind IN ('acquisition','bridge','effect') GROUP BY kind"
@@ -52,7 +68,7 @@ def begin_maintenance(app: Path, timeout: int):
 
 
 def end_maintenance(app: Path):
-    with sqlite3.connect(app) as db:
+    with closing(sqlite3.connect(app)) as db, db:
         db.execute("UPDATE service_controls SET maintenance_enabled=0 WHERE singleton=1")
 
 
@@ -72,8 +88,12 @@ def main():
         begin_maintenance(app, args.maintenance_timeout)
         maintenance = True
         backup_db(app, args.destination / "app.db")
-        with sqlite3.connect(args.destination / "app.db") as snapshot:
+        # A Connection context manager commits the transaction but does not close
+        # the connection. Close it before hashing so a WAL checkpoint cannot
+        # mutate app.db after its digest has been recorded.
+        with closing(sqlite3.connect(args.destination / "app.db")) as snapshot, snapshot:
             snapshot.execute("UPDATE service_controls SET maintenance_enabled=0 WHERE singleton=1")
+        seal_db(args.destination / "app.db")
         files.append(Path("app.db"))
         for source in sorted((args.data_dir / "engine").glob("*.db")):
             lock_path = Path(str(source) + ".lock")
@@ -82,6 +102,7 @@ def main():
                 fcntl.flock(lock, fcntl.LOCK_SH)
                 relative = Path("engine") / source.name
                 backup_db(source, args.destination / relative)
+                seal_db(args.destination / relative)
                 files.append(relative)
     finally:
         if maintenance:
