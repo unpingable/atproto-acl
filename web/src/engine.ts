@@ -8,6 +8,23 @@ import type { Config } from './config.js'
 
 type BridgeReply<T> = { ok: true; result: T } | { ok: false; error: string }
 export type OverrideState = { exempt: string[]; allow: string[]; keep_muted: string[] }
+export type AccountRules = {
+  leave_alone: Array<{ did: string; last_known_handle?: string }>
+  always_keep: Array<{ did: string; last_known_handle?: string }>
+  never_unmute: Array<{ did: string; last_known_handle?: string }>
+}
+export type PortableInspection = {
+  enveloped: boolean
+  provenance: Record<string, unknown>
+  policy_source: string
+  policy_config: Record<string, unknown>
+  policy_hash: string
+  policy_source_hash: string
+  account_rules_hash: string
+  portable_behavior_hash: string
+  account_rules: AccountRules
+  runtime_account_rules: OverrideState
+}
 
 export class PolicyServiceUnavailableError extends Error {
   constructor(readonly diagnosticId: string) {
@@ -167,10 +184,16 @@ export class Engine {
     })
   }
 
-  preview(policy: string, account: string, acquisition: Acquisition, now?: string, timeoutMs?: number) {
+  preview(policy: string, account: string, acquisition: Acquisition, now?: string, timeoutMs?: number,
+    portable?: { overrideSnapshot: OverrideState; accountRulesHash: string; portableBehaviorHash: string }) {
     return this.call<Receipt>({
       command: 'preview', policy, account, state: this.statePath(account),
       ...acquisition, now, max_requests: 50, max_pages: 20,
+      ...(portable ? {
+        override_snapshot: portable.overrideSnapshot,
+        account_rules_hash: portable.accountRulesHash,
+        portable_behavior_hash: portable.portableBehaviorHash,
+      } : {}),
     }, { key: account, timeoutMs })
   }
 
@@ -214,6 +237,28 @@ export class Engine {
 
   overrides(account: string) {
     return this.call<OverrideState>({ command: 'list_overrides', account, state: this.statePath(account) }, { key: account })
+  }
+
+  replaceOverrides(account: string, overrides: OverrideState, revision: number, accountRulesHash: string) {
+    return this.call<OverrideState>({
+      command: 'replace_overrides', account, state: this.statePath(account), overrides,
+      revision, account_rules_hash: accountRulesHash,
+    }, { key: account })
+  }
+
+  inspectPortable(document: string, account: string) {
+    return this.call<PortableInspection>({ command: 'inspect_portable', document }, {
+      key: account, timeoutMs: 10_000, maxInputBytes: 768 * 1024, maxOutputBytes: 2 * 1024 * 1024,
+    })
+  }
+
+  exportPortable(input: {
+    account: string; policy: string; policyName: string; policyRevision: number; accountRules: AccountRules
+  }) {
+    return this.call<{ document: string; policy_hash: string; account_rules_hash: string; portable_behavior_hash: string }>({
+      command: 'export_portable', policy: input.policy, policy_name: input.policyName,
+      policy_revision: input.policyRevision, account_rules: input.accountRules,
+    }, { key: input.account, timeoutMs: 10_000, maxInputBytes: 768 * 1024, maxOutputBytes: 2 * 1024 * 1024 })
   }
 }
 

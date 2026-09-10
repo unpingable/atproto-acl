@@ -132,6 +132,27 @@ class Store:
             self.conn.execute("DELETE FROM overrides WHERE did=? AND kind=?", (did, kind))
         self.audit("override", {"subject": did, "kind": kind, "enabled": enabled})
 
+    def replace_overrides(self, values, revision=None, rule_hash=None):
+        expected = {"exempt", "allow", "keep_muted"}
+        if set(values) != expected:
+            raise StateError("replacement override set is incomplete")
+        normalized = {}
+        for kind, dids in values.items():
+            if not isinstance(dids, list) or any(not isinstance(did, str) or not did.startswith("did:") for did in dids):
+                raise StateError("replacement overrides require DID lists")
+            normalized[kind] = sorted(set(dids))
+        with self.transaction():
+            self.conn.execute("DELETE FROM overrides")
+            self.conn.executemany(
+                "INSERT INTO overrides(did,kind) VALUES (?,?)",
+                ((did, kind) for kind in sorted(normalized) for did in normalized[kind]),
+            )
+            self.audit("override_projection", {
+                "revision": revision, "account_rules_hash": rule_hash,
+                "overrides": normalized,
+            })
+        return normalized
+
     def audit(self, kind, body):
         self.conn.execute("INSERT INTO audit(kind,body,at) VALUES (?,?,?)", (kind, canonical(body), utcnow()))
 

@@ -18,6 +18,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install '.[test]'
+      - run: python scripts/verify-neutral-instruments.py
       - run: python -m pytest
       - run: python -m build
   web:

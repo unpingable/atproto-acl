@@ -33,7 +33,7 @@ npm run build --prefix web
 cp web/package.json web/package-lock.json "$stage/root/web/"
 npm ci --omit=dev --prefix "$stage/root/web"
 cp -R web/dist web/public web/scripts "$stage/root/web/"
-cp -R deploy docs examples "$stage/root/"
+cp -R deploy docs examples vendor "$stage/root/"
 cp README.md ARCHITECTURE.md INVARIANTS.md PROVENANCE.md ROADMAP.md LICENSE LICENSE-MIT LICENSE-APACHE "$stage/root/"
 find "$stage/root" -type d -name __pycache__ -prune -exec rm -rf {} +
 find "$stage/root" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete

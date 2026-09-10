@@ -1,5 +1,5 @@
 import { id, sha, AppDb, asJson } from './db.js'
-import { Engine, stableHash } from './engine.js'
+import { Engine, stableHash, type AccountRules, type OverrideState, type PortableInspection } from './engine.js'
 import type { AccountProvider, Acquisition, FeedExposure, Receipt, ReceiptRow } from './types.js'
 import { BSKY38_URL, fetchBsky38, type Bsky38Members } from './bsky38.js'
 import { ServiceControls } from './controls.js'
@@ -31,6 +31,236 @@ export class AclService {
     readonly bsky38: () => Promise<Bsky38Members> = fetchBsky38,
     readonly controls?: ServiceControls,
   ) {}
+
+  private emptyAccountRules(): AccountRules {
+    return { leave_alone: [], always_keep: [], never_unmute: [] }
+  }
+
+  private runtimeRules(rules: AccountRules): OverrideState {
+    return {
+      exempt: rules.leave_alone.map(item => item.did).sort(),
+      allow: rules.always_keep.map(item => item.did).sort(),
+      keep_muted: rules.never_unmute.map(item => item.did).sort(),
+    }
+  }
+
+  private accountRulesHash(rules: AccountRules) { return stableHash(this.runtimeRules(rules)) }
+
+  async portableContext(did: string, policyConfig: Record<string, unknown>) {
+    const authority = await this.accountRules(did)
+    this.assertAccountRulesReady(did)
+    return {
+      overrideSnapshot: this.runtimeRules(authority.rules),
+      accountRulesHash: authority.ruleHash,
+      portableBehaviorHash: stableHash({ policy: policyConfig, account_rules: this.runtimeRules(authority.rules) }),
+    }
+  }
+
+  async accountRules(did: string): Promise<{ rules: AccountRules; revision: number; ruleHash: string }> {
+    let row = this.db.sql.prepare('SELECT * FROM account_rule_sets WHERE did=?').get(did) as Record<string, unknown> | undefined
+    if (!row) {
+      const runtime = await this.engine.overrides(did)
+      const cached = this.db.sql.prepare('SELECT subject,kind,handle FROM account_exceptions WHERE did=?')
+        .all(did) as Array<{ subject: string; kind: string; handle: string }>
+      const handle = new Map(cached.map(item => [`${item.subject}\u0000${item.kind}`, item.handle]))
+      const convert = (kind: keyof OverrideState) => runtime[kind].sort().map(subject => ({
+        did: subject, ...(handle.get(`${subject}\u0000${kind}`) ? { last_known_handle: handle.get(`${subject}\u0000${kind}`) } : {}),
+      }))
+      const rules: AccountRules = {
+        leave_alone: convert('exempt'), always_keep: convert('allow'), never_unmute: convert('keep_muted'),
+      }
+      const at = now()
+      const ruleHash = this.accountRulesHash(rules)
+      this.db.sql.prepare(`INSERT OR IGNORE INTO account_rule_sets
+        (did,revision,rules,rule_hash,projected_revision,projected_hash,created_at,updated_at)
+        VALUES(?,1,?,?,1,?,?,?)`).run(did, JSON.stringify(rules), ruleHash, ruleHash, at, at)
+      row = this.db.sql.prepare('SELECT * FROM account_rule_sets WHERE did=?').get(did) as Record<string, unknown>
+      this.db.audit(did, 'account_rules_authority_initialized', { revision: Number(row.revision) })
+    }
+    const rules = asJson<AccountRules>(row, 'rules')
+    if (Number(row.projected_revision ?? 0) !== Number(row.revision) || row.projected_hash !== row.rule_hash) {
+      await this.projectAccountRules(did, Number(row.revision), String(row.rule_hash), rules)
+    }
+    return { rules, revision: Number(row.revision), ruleHash: String(row.rule_hash) }
+  }
+
+  private async projectAccountRules(did: string, revision: number, ruleHash: string, rules: AccountRules) {
+    await this.engine.replaceOverrides(did, this.runtimeRules(rules), revision, ruleHash)
+    this.db.transaction(() => {
+      const current = this.db.sql.prepare('SELECT revision,rule_hash FROM account_rule_sets WHERE did=?')
+        .get(did) as { revision: number; rule_hash: string } | undefined
+      if (!current || current.revision !== revision || current.rule_hash !== ruleHash) return
+      this.db.sql.prepare('UPDATE account_rule_sets SET projected_revision=?,projected_hash=?,updated_at=? WHERE did=?')
+        .run(revision, ruleHash, now(), did)
+      this.db.audit(did, 'account_rules_projected', { revision, account_rules_hash: ruleHash })
+    })
+  }
+
+  assertAccountRulesReady(did: string) {
+    const row = this.db.sql.prepare('SELECT revision,rule_hash,projected_revision,projected_hash FROM account_rule_sets WHERE did=?')
+      .get(did) as Record<string, unknown> | undefined
+    if (!row || Number(row.revision) !== Number(row.projected_revision) || row.rule_hash !== row.projected_hash) {
+      throw new Error('account-specific rules are still synchronizing; try again shortly')
+    }
+  }
+
+  async setAccountRule(did: string, subject: string, kind: keyof OverrideState, enabled: boolean, handle = '') {
+    const current = await this.accountRules(did)
+    const key: Record<keyof OverrideState, keyof AccountRules> = {
+      exempt: 'leave_alone', allow: 'always_keep', keep_muted: 'never_unmute',
+    }
+    const rules = structuredClone(current.rules)
+    const group = key[kind]
+    const retained = rules[group].filter(item => item.did !== subject)
+    if (enabled) retained.push({ did: subject, ...(handle ? { last_known_handle: handle } : {}) })
+    rules[group] = retained.sort((a, b) => a.did.localeCompare(b.did))
+    const revision = current.revision + 1
+    const ruleHash = this.accountRulesHash(rules)
+    const changed = this.db.sql.prepare(`UPDATE account_rule_sets SET revision=?,rules=?,rule_hash=?,projected_revision=NULL,
+      projected_hash=NULL,updated_at=? WHERE did=? AND revision=?`).run(
+      revision, JSON.stringify(rules), ruleHash, now(), did, current.revision,
+    )
+    if (changed.changes !== 1) throw new Error('account-specific rules changed concurrently; try again')
+    await this.projectAccountRules(did, revision, ruleHash, rules)
+    this.db.audit(did, 'account_rule_changed', { subject, kind, enabled, revision })
+    return rules
+  }
+
+  async exportPolicy(did: string, policyId: string) {
+    const policy = this.owned<Record<string, unknown>>('policies', policyId, did)
+    const authority = await this.accountRules(did)
+    this.assertAccountRulesReady(did)
+    return this.engine.exportPortable({ account: did, policy: String(policy.body), policyName: String(policy.name),
+      policyRevision: Number(policy.revision), accountRules: authority.rules })
+  }
+
+  private importDiff(currentPolicy: Record<string, unknown> | undefined,
+    currentPolicyState: { policy_hash: string; config: Record<string, unknown> } | undefined,
+    currentRules: AccountRules, inspection: PortableInspection) {
+    const before = this.runtimeRules(currentRules)
+    const after = inspection.runtime_account_rules
+    const added = Object.keys(before).reduce((count, key) => count + after[key as keyof OverrideState]
+      .filter(value => !before[key as keyof OverrideState].includes(value)).length, 0)
+    const removed = Object.keys(before).reduce((count, key) => count + before[key as keyof OverrideState]
+      .filter(value => !after[key as keyof OverrideState].includes(value)).length, 0)
+    const accountRuleChanges = Object.fromEntries(Object.keys(before).map(key => [key, {
+      added: after[key as keyof OverrideState].filter(value => !before[key as keyof OverrideState].includes(value)),
+      removed: before[key as keyof OverrideState].filter(value => !after[key as keyof OverrideState].includes(value)),
+    }]))
+    return {
+      policy_changed: !currentPolicy || currentPolicyState?.policy_hash !== inspection.policy_hash,
+      policy_sections_changed: currentPolicyState ? [...new Set([
+        ...Object.keys(currentPolicyState.config), ...Object.keys(inspection.policy_config),
+      ])].filter(key => stableHash(currentPolicyState.config[key]) !== stableHash(inspection.policy_config[key])).sort() : Object.keys(inspection.policy_config).sort(),
+      current_policy_revision: currentPolicy ? Number(currentPolicy.revision) : null,
+      account_rules_added: added, account_rules_removed: removed,
+      account_rule_changes: accountRuleChanges,
+      before_account_rules: currentRules, after_account_rules: inspection.account_rules,
+    }
+  }
+
+  async createImportDraft(did: string, document: string, targetPolicyId?: string, suppliedName?: string) {
+    if (Buffer.byteLength(document) > 512 * 1024) throw new Error('portable policy must be no larger than 512 KiB')
+    const inspection = await this.engine.inspectPortable(document, did)
+    if (inspection.policy_config.account !== did) throw new Error('imported policy belongs to a different account')
+    const authority = await this.accountRules(did)
+    let target: Record<string, unknown> | undefined
+    if (targetPolicyId) target = this.owned<Record<string, unknown>>('policies', targetPolicyId, did)
+    const targetPolicyState = target ? await this.engine.validate(String(target.body), did) : undefined
+    const draftId = id('import')
+    const name = (suppliedName || String(inspection.provenance.policy_name ?? '') || (target ? String(target.name) : 'Imported policy')).trim()
+    if (!name || name.length > 120) throw new Error('policy name must be between 1 and 120 characters')
+    const at = now()
+    const diff = this.importDiff(target, targetPolicyState, authority.rules, inspection)
+    this.db.sql.prepare(`INSERT INTO policy_import_drafts
+      (id,did,target_policy_id,expected_revision,name,source_document,policy_body,account_rules,policy_hash,
+       account_rules_hash,portable_behavior_hash,diff,created_at,expires_at,consumed_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`).run(
+      draftId, did, targetPolicyId ?? null, target ? Number(target.revision) : null, name, document,
+      inspection.policy_source, JSON.stringify(inspection.account_rules), inspection.policy_hash,
+      inspection.account_rules_hash, inspection.portable_behavior_hash, JSON.stringify(diff), at,
+      new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    )
+    this.db.audit(did, 'policy_import_validated', { draft: draftId, target: targetPolicyId ?? null,
+      policy_hash: inspection.policy_hash, portable_behavior_hash: inspection.portable_behavior_hash })
+    return this.importDraft(did, draftId)
+  }
+
+  importDraft(did: string, draftId: string) {
+    const draft = this.db.sql.prepare(`SELECT * FROM policy_import_drafts
+      WHERE id=? AND did=? AND expires_at>? AND consumed_at IS NULL`).get(draftId, did, now()) as Record<string, unknown> | undefined
+    if (!draft) throw new Error('import preview is missing, expired, already used, or belongs to another account')
+    return draft
+  }
+
+  async previewImportDraft(did: string, draftId: string) {
+    const lease = await this.controls?.beginAcquisition(did)
+    try {
+      const draft = this.importDraft(did, draftId)
+      const body = String(draft.policy_body)
+      const validated = await this.engine.validate(body, did)
+      const rules = asJson<AccountRules>(draft, 'account_rules')
+      const acquisition = await this.acquire(did, body, undefined, validated.config)
+      const receipt = await this.engine.preview(body, did, acquisition, undefined, 120_000, {
+        overrideSnapshot: this.runtimeRules(rules),
+        accountRulesHash: String(draft.account_rules_hash),
+        portableBehaviorHash: String(draft.portable_behavior_hash),
+      })
+      const previewId = id('prev')
+      const effectiveHash = stableHash({ did, policy: receipt.policy_hash, revision: 0,
+        overrides: receipt.override_hash, acquisition: acquisition.acquisition_hash })
+      receipt.effective_config_hash = effectiveHash
+      this.db.sql.prepare('INSERT INTO previews VALUES(?,?,?,?,?,?,?,?,?,?)').run(
+        previewId, did, `draft:${draftId}`, 0, effectiveHash, JSON.stringify(receipt), JSON.stringify(acquisition),
+        receipt.complete ? 1 : 0, now(), new Date(Date.now() + 30 * 60 * 1000).toISOString())
+      this.db.audit(did, 'policy_import_live_preview_created', { draft: draftId, preview: previewId,
+        retained_as_normal_preview_evidence: true })
+      return previewId
+    } finally {
+      if (lease) this.controls?.finishAcquisition(lease)
+    }
+  }
+
+  async confirmImport(did: string, draftId: string) {
+    const draft = this.importDraft(did, draftId)
+    let policyId = ''
+    let revision = 1
+    const rules = asJson<AccountRules>(draft, 'account_rules')
+    this.db.transaction(() => {
+      const consumed = this.db.sql.prepare(`UPDATE policy_import_drafts SET consumed_at=?
+        WHERE id=? AND did=? AND consumed_at IS NULL AND expires_at>?`).run(now(), draftId, did, now())
+      if (consumed.changes !== 1) throw new Error('import preview was already used or expired')
+      const targetId = draft.target_policy_id ? String(draft.target_policy_id) : undefined
+      if (targetId) {
+        const target = this.db.sql.prepare('SELECT revision FROM policies WHERE id=? AND did=?').get(targetId, did) as { revision: number } | undefined
+        if (!target || target.revision !== Number(draft.expected_revision)) throw new Error('policy changed; validate the import again')
+        revision = target.revision + 1
+        this.db.sql.prepare('UPDATE policies SET name=?,body=?,revision=?,source_hash=?,updated_at=? WHERE id=? AND did=?')
+          .run(String(draft.name), String(draft.policy_body), revision, sha(String(draft.policy_body)), now(), targetId, did)
+        policyId = targetId
+      } else {
+        policyId = id('pol')
+        this.db.sql.prepare('INSERT INTO policies VALUES(?,?,?,?,?,?,0,?,?)').run(
+          policyId, did, String(draft.name), String(draft.policy_body), revision, sha(String(draft.policy_body)), now(), now())
+      }
+      const authority = this.db.sql.prepare('SELECT revision FROM account_rule_sets WHERE did=?').get(did) as { revision: number }
+      const ruleRevision = authority.revision + 1
+      this.db.sql.prepare(`UPDATE account_rule_sets SET revision=?,rules=?,rule_hash=?,projected_revision=NULL,
+        projected_hash=NULL,updated_at=? WHERE did=?`).run(
+        ruleRevision, JSON.stringify(rules), String(draft.account_rules_hash), now(), did,
+      )
+      this.db.audit(did, 'policy_import_confirmed', { draft: draftId, policy: policyId, revision,
+        account_rules_revision: ruleRevision, portable_behavior_hash: draft.portable_behavior_hash })
+    })
+    const authority = this.db.sql.prepare('SELECT revision,rule_hash FROM account_rule_sets WHERE did=?').get(did) as { revision: number; rule_hash: string }
+    try {
+      await this.projectAccountRules(did, authority.revision, authority.rule_hash, rules)
+    } catch {
+      this.db.audit(did, 'account_rules_projection_pending', { revision: authority.revision,
+        account_rules_hash: authority.rule_hash })
+    }
+    return policyId
+  }
 
   async acquire(
     did: string,
@@ -283,8 +513,9 @@ export class AclService {
     if (!policy) throw new Error('policy not found')
     const body = String(policy.body)
     const validated = await this.engine.validate(body, did)
+    const portable = await this.portableContext(did, validated.config)
     const acquisition = await this.acquire(did, body, fixture, validated.config)
-    let receipt = await this.engine.preview(String(policy.body), did, acquisition, evaluationTime, deadline - Date.now())
+    let receipt = await this.engine.preview(String(policy.body), did, acquisition, evaluationTime, deadline - Date.now(), portable)
     if (!fixture && !this.fixtureAcquisition) {
       const missing = receipt.rows.map(row => row.subject).filter(subject => !(subject in acquisition.remote))
       if (missing.length) {
@@ -295,7 +526,7 @@ export class AclService {
           subjects: acquisition.subjects, identities: acquisition.identities,
           discovery: acquisition.discovery, remote: acquisition.remote,
         })
-        receipt = await this.engine.preview(String(policy.body), did, acquisition, evaluationTime, deadline - Date.now())
+        receipt = await this.engine.preview(String(policy.body), did, acquisition, evaluationTime, deadline - Date.now(), portable)
       }
     }
     const previewId = id('prev')
@@ -507,6 +738,7 @@ export class AclService {
 
   approve(did: string, previewId: string, kind: 'apply' | 'apply_followed' | 'release', subjects: string[]) {
     this.controls?.requireAccountWrite(did)
+    this.assertAccountRulesReady(did)
     return this.db.transaction(() => {
       const preview = this.db.sql.prepare('SELECT * FROM previews WHERE id=? AND did=? AND expires_at>?')
         .get(previewId, did, now()) as Record<string, unknown> | undefined

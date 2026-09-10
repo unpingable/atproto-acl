@@ -133,10 +133,10 @@ keep_muted: []
 export const observations = [
   ...['did:plc:alice', 'did:plc:bob', 'did:plc:carol'].map(subject => ({
     provider: 'did:plc:activity', subject, property: 'posts_per_day', value: 24,
-    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z',
+    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
   })),
   {
     provider: 'did:plc:trusted', subject: 'did:plc:bob', property: 'member', value: true,
-    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z',
+    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
   },
 ]

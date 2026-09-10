@@ -181,7 +181,7 @@ test('followed matches require their own exact approval and execute from the sav
     identities: { [did]: did },
     observations: subjects.map(subject => ({
       provider: 'did:plc:activity', subject, property: 'posts_per_day', value: 24,
-      observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-10T12:00:00Z',
+      observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
     })),
     coverage: subjects.map(subject => ({ provider: 'did:plc:activity', subject, complete: true,
       checked_at: '2026-09-08T12:01:00Z', reason: '' })),
@@ -400,7 +400,7 @@ test('pre-existing mute is preserved and exemption removes automation jurisdicti
   let alice = preview.receipt.rows.find(row => row.subject === 'did:plc:alice')!
   assert.equal(alice.action, 'none')
   assert.match(alice.reason, /preserve existing/)
-  await service.engine.override(did, 'did:plc:alice', 'exempt', true)
+  await service.setAccountRule(did, 'did:plc:alice', 'exempt', true, 'alice.test')
   preview = await service.preview(did, policyId, undefined, '2026-09-08T12:03:00Z')
   alice = preview.receipt.rows.find(row => row.subject === 'did:plc:alice')!
   assert.equal(alice.action, 'none')
@@ -465,6 +465,42 @@ test('Bsky38 snapshot is bounded and source failure cannot become an empty clear
   assert.equal(failed.receipt.rows.filter(row => row.action === 'mute').length, 0)
   assert.equal(failed.receipt.discovery?.[0]?.complete, false)
   db.close()
+})
+
+test('portable YAML carries policy and independent account rules through a revision-checked import', async () => {
+  const first = setup()
+  const did = 'did:plc:user1'
+  const policyId = first.service.savePolicy(did, 'Portable policy', policy(did))
+  await first.service.setAccountRule(did, 'did:plc:alice', 'exempt', true, 'alice.test')
+  await first.service.setAccountRule(did, 'did:plc:alice', 'keep_muted', true, 'alice.test')
+  const exported = await first.service.exportPolicy(did, policyId)
+  assert.match(exported.document, /^format: atproto-acl\.portable-policy/m)
+  assert.match(exported.document, /leave_alone:/)
+  assert.match(exported.document, /never_unmute:/)
+
+  const second = setup()
+  const draft = await second.service.createImportDraft(did, exported.document)
+  const diff = JSON.parse(String(draft.diff))
+  assert.equal(diff.account_rules_added, 2)
+  const draftPreviewId = await second.service.previewImportDraft(did, String(draft.id))
+  const draftPreview = second.service.owned<Record<string, unknown>>('previews', draftPreviewId, did)
+  assert.equal(JSON.parse(String(draftPreview.receipt)).portable_behavior_hash, exported.portable_behavior_hash)
+  assert.throws(() => second.service.approve(did, draftPreviewId, 'apply', ['did:plc:alice']), /policy changed/)
+  const importedId = await second.service.confirmImport(did, String(draft.id))
+  assert.equal(String(second.service.owned<Record<string, unknown>>('policies', importedId, did).name), 'Portable policy')
+  const authority = await second.service.accountRules(did)
+  assert.deepEqual(authority.rules.leave_alone.map(item => item.did), ['did:plc:alice'])
+  assert.deepEqual(authority.rules.never_unmute.map(item => item.did), ['did:plc:alice'])
+  assert.equal(authority.ruleHash, exported.account_rules_hash)
+  await assert.rejects(() => second.service.confirmImport(did, String(draft.id)), /already used|missing/)
+
+  const replacement = second.service.savePolicy(did, 'Changed meanwhile', policy(did, 999), importedId)
+  assert.equal(replacement, importedId)
+  const stale = await second.service.createImportDraft(did, exported.document, importedId)
+  second.service.savePolicy(did, 'Changed again', policy(did, 998), importedId)
+  await assert.rejects(() => second.service.confirmImport(did, String(stale.id)), /policy changed/)
+  first.db.close()
+  second.db.close()
 })
 
 function serviceOwned(db: AppDb, id: string) {

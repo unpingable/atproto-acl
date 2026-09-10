@@ -37,6 +37,15 @@ The advanced YAML editor uses the same server-side parser and policy validator a
 the guided editor. An invalid draft can be repaired but cannot be previewed or
 executed.
 
+## Your policy is portable
+
+The hosted UI exports human-readable YAML that the standalone CLI accepts
+without hand-editing. The document includes the exact evaluator policy and all
+three independent account-specific rule sets; provenance, receipts, jobs, and
+history remain non-behavioral service artifacts. Import validates and shows a
+separate policy/rule diff before an explicit create or revision-checked replace.
+See [Portable policy YAML](docs/portable-policy.md).
+
 ## Safety model
 
 - No policy is implicitly enabled, and preview is always safe and read-only.

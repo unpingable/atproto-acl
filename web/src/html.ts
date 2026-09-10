@@ -54,12 +54,22 @@ export function page(title: string, body: string, account?: { handle: string; di
 <meta name="twitter:image:alt" content="atproto-acl finds high-volume accounts in your Bluesky feeds and lets you choose what to mute.">
 <link rel="stylesheet" href="/app.css"><script src="/app.js" defer></script></head>
 <body><a class="skip" href="#content">Skip to content</a>
-<header><a class="brand" href="${account ? '/app' : '/'}">atproto-acl</a>
-<a class="header-link" href="/help">Help</a>
+<header class="nz-masthead"><a class="nz-family" href="${account ? '/app' : '/'}">neutral.zone / instruments</a><a class="brand nz-product" href="${account ? '/app' : '/'}">atproto-acl</a>
+<nav><a class="header-link" href="/about">About</a><a class="header-link" href="/help">How it works</a><a class="header-link" href="https://github.com/unpingable/atproto-acl">Source</a></nav>
 ${account ? `<div class="identity"><strong>@${h(account.handle)}</strong></div>
 <form method="post" action="/signout"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Sign out</button></form>` : ''}
 </header><main id="content" tabindex="-1">${body}</main>
-<footer>Nothing is muted until you approve it. · <a href="/help">Help</a> · <a href="/privacy">Privacy</a></footer></body></html>`
+<footer class="nz-footer"><nav><a href="/about">About</a><a href="https://github.com/unpingable/atproto-acl">Source on GitHub</a><a href="/help">Methodology</a><a href="/privacy">Privacy</a><a href="https://bsky.app/profile/neutral.zone">Contact</a></nav><p>Nothing is muted until you approve it. Operated by The Neutral Ambassador (@neutral.zone); source and project history are published by James Beck on GitHub.</p></footer></body></html>`
+}
+
+export function aboutPage(account?: { handle: string; did: string }, csrf = '') {
+  return page('About', `<nav><a href="${account ? '/app' : '/'}">← ${account ? 'Dashboard' : 'Sign in'}</a></nav>
+<section class="title"><div><p class="eyebrow">About this instrument</p><h1>Your rules for your attention.</h1><p>atproto-acl is a personal moderation-policy tool for Bluesky. It finds accounts matching rules you choose, shows every proposed change, and acts only after explicit approval.</p></div></section>
+<section class="panel privacy-notice"><h2>Why it exists</h2><p>Your feed policy should remain understandable, inspectable, and yours—not a hidden setting inside a service.</p>
+<h2>What it looks at</h2><p>Only the feeds, account relationships, moderation state, and observation providers named by your saved policy.</p>
+<h2>What it does not claim</h2><p>A match is not a judgment about a person or their intent. Incomplete evidence never becomes permission to act, and a scan never changes your account.</p>
+<h2>Can I verify or leave?</h2><p>Yes. The <a href="https://github.com/unpingable/atproto-acl">source is public</a>, <a href="/help">the method is documented</a>, and every policy can be downloaded as YAML and used with the standalone CLI.</p>
+<h2>Who runs it?</h2><p>Operated by The Neutral Ambassador (<a href="https://bsky.app/profile/neutral.zone">@neutral.zone</a>). Source code and project history are published by James Beck on GitHub. Privacy and legal accountability identify James Beck explicitly.</p></section>`, account, csrf)
 }
 
 export function helpPage(account?: { handle: string; did: string }, csrf = '') {
@@ -121,6 +131,7 @@ export function landing(loginToken: string, error = '', admissionMode: 'allowlis
   return page('Sign in', `
 <section class="hero"><p class="eyebrow">For Bluesky</p><h1>Choose what earns your attention.</h1>
 <p>Some accounts post often enough to take over your feed. This app finds them and shows you the list, so you can choose what to mute.</p>${admissionMode === 'open' ? '<p class="open-preview"><strong>Open limited beta:</strong> Sign in to measure your feeds and inspect every proposed change. This preview is read-only; moderation actions are not yet generally available.</p>' : ''}</section>
+<div class="nz-status-rail"><span><strong>Mode</strong> preview first</span><span><strong>Policy</strong> user-owned</span><span><strong>Actions</strong> explicit approval</span></div>
 ${error ? `<div role="alert" class="notice bad">${h(error)}</div>` : ''}
 <div class="landing-grid">
 <section class="panel narrow"><h2>Sign in with Bluesky</h2>
@@ -134,7 +145,8 @@ ${admissionMode === 'invite' ? '<label for="invite_code">Invite code <span class
 <ol><li><strong>Scan.</strong> The app reads a sample of your Following and Discover feeds and checks who’s posting at very high volume.</li>
 <li><strong>Look at the list.</strong> Every account shows why it matched and whether you follow them. Nothing has changed yet.</li>
 <li><strong>Tick and mute.</strong> Only accounts you check are attempted. The results show what Bluesky confirmed. Muting is private — they’re never notified.</li></ol>
-<p class="muted">Posting-volume data comes from labels published by Cornell Tech, not from this app. <a href="/help">More about how this works</a>.</p></section></div>`)
+<p class="muted">Posting-volume data comes from labels published by Cornell Tech, not from this app. <a href="/help">More about how this works</a>.</p></section></div>
+<section class="portable-callout"><div><p class="eyebrow">No lock-in</p><h2>Your policy is portable.</h2><p>Download human-readable YAML, import it here, or run it with the standalone CLI. If this service disappears, your intended policy—including account-specific rules—still works locally.</p></div><p><code>WEB UI ↔ ACL.YAML ↔ CLI</code></p></section>`)
 }
 
 function guidedSummary(guided: GuidedPolicy) {
@@ -204,10 +216,10 @@ export function dashboard(
       <form method="post" action="/overrides"><input type="hidden" name="csrf" value="${h(csrf)}"><input type="hidden" name="subject" value="${h(subject)}">
       <input type="hidden" name="kind" value="${h(item.kind)}"><button class="quiet" name="enabled" value="0">Remove</button></form></li>`
   }).join('') : '<li class="empty">No accounts on this list yet.</li>'
-  const workspace = policies.length ? `<section class="policy-list" aria-labelledby="policies-heading"><div class="section-head"><h2 id="policies-heading">Your policies</h2><div class="policy-create"><a href="/policies/new?example=bsky38">Add Bsky38 quiet mode</a><a href="/policies/new">Add a policy</a></div></div>${policyRows}</section>` : `
+  const workspace = policies.length ? `<section class="policy-list" aria-labelledby="policies-heading"><div class="section-head"><h2 id="policies-heading">Your policies</h2><div class="policy-create"><a href="/policies/import">Import YAML</a><a href="/policies/new?example=bsky38">Add Bsky38 quiet mode</a><a href="/policies/new">Add a policy</a></div></div>${policyRows}</section>` : `
 <section class="panel onboarding"><p class="eyebrow">Get started</p><h2>Set up your first scan</h2>
 <ol><li>Pick which feeds to look through and what counts as posting too much.</li><li>See the list of accounts that matched, and why.</li><li>Tick the ones you want muted. Nothing else changes.</li></ol>
-<div class="actions"><a class="button" href="/policies/new?example=poasters">Set up a scan</a><a href="/policies/new?example=bsky38">Or try Bsky38 quiet mode</a></div></section>`
+<div class="actions"><a class="button" href="/policies/new?example=poasters">Set up a scan</a><a href="/policies/import">Import portable YAML</a><a href="/policies/new?example=bsky38">Or try Bsky38 quiet mode</a></div></section>`
   return page('Dashboard', `
 <section class="dashboard-intro"><p class="eyebrow">@${h(account.handle)}</p><h1>Your feed policies</h1>
 <p>A policy is a saved set of rules for finding noisy accounts. Running one only builds a list — you decide who actually gets muted.</p></section>
@@ -215,6 +227,7 @@ ${account.writesEnabled === false && !account.writeReconnectRequired ? '<section
 ${account.writeReconnectRequired ? `<section class="notice" aria-labelledby="moderation-connection-heading"><h2 id="moderation-connection-heading">Reconnect to enable moderation</h2><p>Your account is eligible for moderation actions, but this session has read-only authority. Sign in again to explicitly grant mute and unmute access.</p><form method="post" action="/reconnect"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Grant moderation access</button></form></section>` : ''}
 ${account.reconnectRequired ? `<section class="notice" aria-labelledby="connection-heading"><h2 id="connection-heading">Sign in again to include Discover</h2><p>Your Following feed works fine, but Discover needs a permission that wasn’t granted when you first signed in. Your policies, history, and existing mutes are unaffected.</p><form method="post" action="/reconnect"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Sign in again</button></form></section>` : ''}
 ${workspace}
+<section class="portable-callout"><div><p class="eyebrow">Built-in escape hatch</p><h2>Your policy is portable.</h2><p>Download YAML, import it again, or use the same file with the standalone <code>atproto-acl</code> CLI. Policy settings and account-specific rules travel together; scan history and service jobs do not.</p></div><a class="button quiet" href="/policies/import">Import YAML</a></section>
 <section class="coverage-check" aria-labelledby="coverage-heading"><div><h2 id="coverage-heading">Not sure yet? Take a look first</h2>
 <p>Reads a sample of your Following and Discover feeds and shows how many accounts would match, without saving a policy or changing anything on your account.</p></div>
 <div><form method="post" action="/diagnostics/yield"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Take a look</button></form>
@@ -245,7 +258,8 @@ export function policyEditor(account: { handle: string; did: string }, csrf: str
   return page(value.id ? 'Edit policy' : 'New policy', `
 <nav><a href="/app">← Dashboard</a></nav><section class="title"><div><p class="eyebrow">Policy</p>
 <h1>${value.id ? h(value.name) : 'Set up a scan'}</h1>
-<p>Set the rules here. Running them just builds a list — you tick who actually gets muted.</p></div></section>
+<p>Set the rules here. Running them just builds a list — you tick who actually gets muted.</p>
+${value.id ? `<div class="actions"><form method="post" action="/policies/${h(value.id)}/export"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Download portable YAML</button></form><a href="/policies/${h(value.id)}/import">Replace from YAML</a></div>` : ''}</div></section>
 ${error ? `<div role="alert" class="notice bad">${h(error)}</div>` : ''}
 <form class="panel editor" method="post" action="/policies/save">
 <input type="hidden" name="csrf" value="${h(csrf)}"><input type="hidden" name="id" value="${h(value.id ?? '')}">
@@ -278,6 +292,42 @@ ${value.id ? `<form class="preview-again" method="post" action="/policies/${h(va
 <input type="hidden" name="csrf" value="${h(csrf)}"><h2>Run this now</h2>
 <p>Reads your feeds, the published posting labels, and who you currently have muted. It changes nothing.</p>
 <button>Scan my feed</button></form>` : ''}`, account, csrf)
+}
+
+export function policyImportPage(account: { handle: string; did: string }, csrf: string,
+  target?: { id: string; name: string }, error = '', document = '') {
+  return page('Import policy', `<nav><a href="${target ? `/policies/${h(target.id)}` : '/app'}">← Back</a></nav>
+<section class="title"><div><p class="eyebrow">Portable policy</p><h1>${target ? `Replace ${h(target.name)}` : 'Import a policy'}</h1>
+<p>Paste or choose an atproto-acl YAML file. Nothing is replaced until you inspect the changes and confirm.</p></div></section>
+${error ? `<div role="alert" class="notice bad">${h(error)}</div>` : ''}
+<form class="panel editor portable-import" method="post" action="/policies/import/validate">
+<input type="hidden" name="csrf" value="${h(csrf)}"><input type="hidden" name="target" value="${h(target?.id ?? '')}">
+${target ? '' : '<label for="import_name">Policy name <span class="muted">(optional)</span></label><input id="import_name" name="name" maxlength="120" placeholder="Name from file">'}
+<label for="policy_file">Choose YAML file</label><input id="policy_file" type="file" accept=".yaml,.yml,text/yaml,application/yaml">
+<label for="document">Policy YAML</label><textarea id="document" name="document" rows="22" required>${h(document)}</textarea>
+<p class="muted">Maximum decoded document size: 512 KiB. The file stays in your browser until you submit it.</p>
+<button>Validate and preview changes</button></form>`, account, csrf)
+}
+
+export function policyImportReviewPage(account: { handle: string; did: string }, csrf: string,
+  draft: Record<string, unknown>) {
+  const diff = JSON.parse(String(draft.diff)) as any
+  const created = draft.target_policy_id ? 'replace this policy' : 'create a new policy'
+  return page('Review policy import', `<nav><a href="${draft.target_policy_id ? `/policies/${h(draft.target_policy_id)}` : '/app'}">← Cancel import</a></nav>
+<section class="title"><div><p class="eyebrow">Validated portable policy</p><h1>Review before you ${h(created)}</h1>
+<p><strong>${diff.policy_changed ? 'Policy settings will change.' : 'Policy settings are unchanged.'}</strong>
+ ${h(diff.account_rules_added)} account-specific rule${diff.account_rules_added === 1 ? '' : 's'} added · ${h(diff.account_rules_removed)} removed.</p></div></section>
+<section class="panel"><h2>Policy</h2><p>${diff.policy_changed ? `The evaluator policy differs in ${diff.policy_sections_changed.length} section${diff.policy_sections_changed.length === 1 ? '' : 's'}: ${h(diff.policy_sections_changed.join(', '))}.` : 'The evaluator policy is behaviorally unchanged.'}</p>
+<details><summary>View imported policy YAML</summary><pre>${h(draft.policy_body)}</pre></details></section>
+<section class="panel"><h2>Account-specific rules</h2><p>These three sets are independent. The same account may intentionally appear in more than one.</p>
+${diff.account_rules_removed ? `<div class="notice bad"><strong>${h(diff.account_rules_removed)} rule${diff.account_rules_removed === 1 ? '' : 's'} will be removed.</strong><pre>${h(JSON.stringify(Object.fromEntries(Object.entries(diff.account_rule_changes).map(([kind, change]: [string, any]) => [kind, change.removed]).filter(([, removed]: [string, any]) => removed.length)), null, 2))}</pre></div>` : ''}
+<div class="rule-diff"><div><h3>Before</h3><pre>${h(JSON.stringify(diff.before_account_rules, null, 2))}</pre></div><div><h3>After</h3><pre>${h(JSON.stringify(diff.after_account_rules, null, 2))}</pre></div></div></section>
+<details class="panel"><summary>View exact submitted YAML</summary><pre>${h(draft.source_document)}</pre></details>
+<section class="panel"><h2>Optional live preview</h2><p>Run this imported policy against your feeds before confirming. This contacts current sources and retains normal preview evidence; it is not required for validation.</p>
+<form method="post" action="/policy-imports/${h(draft.id)}/preview"><input type="hidden" name="csrf" value="${h(csrf)}"><button class="quiet">Preview against my feeds now</button></form></section>
+<form method="post" action="/policy-imports/${h(draft.id)}/confirm"><input type="hidden" name="csrf" value="${h(csrf)}">
+<label class="confirm"><input type="checkbox" name="confirm" value="replace" required> I understand this will ${h(created)} and replace all three account-specific rule sets.</label>
+<button>Confirm import</button></form>`, account, csrf)
 }
 
 function age(observed: string, evaluated: string) {

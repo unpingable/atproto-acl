@@ -12,7 +12,8 @@ from . import __version__
 from .adapters import PrivateMuteAdapter
 from .model import digest, utcnow
 from .network import APPVIEW, Client, NetworkError, Session, resolve
-from .policy import PolicyError, compile_policy
+from .policy import PolicyError
+from .portable import parse_portable_document, runtime_account_rules
 from .runtime import build_receipt, execute, prepare
 from .store import StateError, Store
 from .receipts import set_completeness
@@ -100,9 +101,15 @@ def main(argv=None):
     try:
         if args.max_requests <= 0 or args.max_pages <= 0 or getattr(args, "max_actions", 1) <= 0:
             raise StateError("request, page, and action budgets must be positive")
-        policy = compile_policy(args.policy.read_bytes().decode("utf-8"))
+        portable = parse_portable_document(args.policy.read_bytes().decode("utf-8"))
+        policy = portable.policy
+        portable_rules = runtime_account_rules(portable.account_rules)
         if args.command == "validate":
-            emit({"valid": True, "policy_hash": policy.policy_hash, "policy_source_hash": policy.source_hash}, args)
+            emit({"valid": True, "policy_hash": policy.policy_hash,
+                  "policy_source_hash": policy.source_hash,
+                  "account_rules_hash": portable.account_rules_hash,
+                  "portable_behavior_hash": portable.portable_behavior_hash,
+                  "portable": portable.enveloped}, args)
             return 0
         write = args.command == "sync" and (args.apply or args.release)
         if args.fixture and (write or getattr(args, "authenticate", False)):
@@ -167,9 +174,11 @@ def main(argv=None):
                 if not password:
                     raise StateError("provide ATPROTO_ACL_APP_PASSWORD or --app-password-file")
                 session = Session(client, account, password)
-            prepared = prepare(policy, store, client, session, fixture, args.max_pages)
+            prepared = prepare(policy, store, client, session, fixture, args.max_pages, portable_rules)
             now = getattr(args, "now", None) or utcnow()
             receipt = build_receipt(policy, store, *prepared, now)
+            receipt["account_rules_hash"] = portable.account_rules_hash
+            receipt["portable_behavior_hash"] = portable.portable_behavior_hash
             receipt["fixture"] = fixture is not None
             receipt["requests"] = client.requests
             if write:

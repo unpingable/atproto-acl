@@ -134,7 +134,9 @@ export class Worker {
       client = await this.service.accounts.restore(did)
       const approvedAcquisition = JSON.parse(String(job.preview_acquisition))
       const acquisition = await this.service.acquire(did, String(policy.body), undefined, undefined, approvedAcquisition)
-      receipt = await this.service.engine.preview(String(policy.body), did, acquisition)
+      const validated = await this.service.engine.validate(String(policy.body), did)
+      const portable = await this.service.portableContext(did, validated.config)
+      receipt = await this.service.engine.preview(String(policy.body), did, acquisition, undefined, undefined, portable)
     } catch (error) {
       const code = codeFor(error)
       if (code === 'rate_limited') {

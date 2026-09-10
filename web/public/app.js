@@ -185,3 +185,17 @@ for (const button of document.querySelectorAll('[data-select]')) {
 if (document.querySelector('#measurement-refresh[data-auto-refresh="true"]')) {
   window.setTimeout(() => window.location.reload(), 2000)
 }
+
+const portableFile = document.querySelector('#policy_file')
+const portableDocument = document.querySelector('#document')
+portableFile?.addEventListener('change', async () => {
+  const file = portableFile.files?.[0]
+  if (!file || !portableDocument) return
+  if (file.size > 512 * 1024) {
+    portableFile.setCustomValidity('Portable policy files must be no larger than 512 KiB.')
+    portableFile.reportValidity()
+    return
+  }
+  portableFile.setCustomValidity('')
+  portableDocument.value = await file.text()
+})

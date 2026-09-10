@@ -15,21 +15,25 @@ from .receipts import add_context, disposition_reasons, set_completeness
 from .store import StateError
 
 
-def resolve_overrides(policy, store, resolver):
+def resolve_overrides(policy, store, resolver, account_rules=None):
     overrides = store.overrides()
     for layer in overrides:
         for actor in policy.config[layer]:
             did = resolver(actor)
             store.pin(actor, did)
             overrides[layer].add(did)
+    for layer, dids in (account_rules or {}).items():
+        if layer not in overrides:
+            raise StateError("unknown portable account rule")
+        overrides[layer].update(dids)
     overrides["exempt"].add(store.account)
     return overrides
 
 
-def prepare(policy, store, client, session=None, fixture=None, max_pages=20):
+def prepare(policy, store, client, session=None, fixture=None, max_pages=20, account_rules=None):
     config = policy.config
     resolver = (lambda actor: actor if actor.startswith("did:") else fixture.get("identities", {})[actor]) if fixture else lambda actor: resolve(client, actor)
-    overrides = resolve_overrides(policy, store, resolver)
+    overrides = resolve_overrides(policy, store, resolver, account_rules)
     if fixture is not None:
         if fixture.get("version") != 1 or fixture.get("account") != store.account:
             raise StateError("fixture version/account mismatch")

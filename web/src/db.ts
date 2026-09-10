@@ -49,6 +49,21 @@ export class AppDb {
         subject TEXT NOT NULL, kind TEXT NOT NULL, handle TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL, PRIMARY KEY(did, subject, kind)
       );
+      CREATE TABLE IF NOT EXISTS account_rule_sets (
+        did TEXT PRIMARY KEY REFERENCES users(did) ON DELETE CASCADE,
+        revision INTEGER NOT NULL, rules TEXT NOT NULL, rule_hash TEXT NOT NULL,
+        projected_revision INTEGER, projected_hash TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS policy_import_drafts (
+        id TEXT PRIMARY KEY, did TEXT NOT NULL REFERENCES users(did) ON DELETE CASCADE,
+        target_policy_id TEXT, expected_revision INTEGER, name TEXT NOT NULL,
+        source_document TEXT NOT NULL, policy_body TEXT NOT NULL, account_rules TEXT NOT NULL,
+        policy_hash TEXT NOT NULL, account_rules_hash TEXT NOT NULL,
+        portable_behavior_hash TEXT NOT NULL, diff TEXT NOT NULL,
+        created_at TEXT NOT NULL, expires_at TEXT NOT NULL, consumed_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS policy_import_drafts_user ON policy_import_drafts(did,expires_at);
       CREATE TABLE IF NOT EXISTS previews (
         id TEXT PRIMARY KEY, did TEXT NOT NULL REFERENCES users(did) ON DELETE CASCADE,
         policy_id TEXT NOT NULL, policy_revision INTEGER NOT NULL, effective_hash TEXT NOT NULL,
@@ -185,7 +200,8 @@ export class AppDb {
       const previews = this.sql.prepare(`DELETE FROM previews WHERE created_at<? AND NOT EXISTS
         (SELECT 1 FROM approvals a WHERE a.preview_id=previews.id AND a.did=previews.did)`).run(cutoff).changes
       const measurements = this.sql.prepare('DELETE FROM yield_reports WHERE created_at<?').run(cutoff).changes
-      return { previews, measurements }
+      const importDrafts = this.sql.prepare('DELETE FROM policy_import_drafts WHERE expires_at<?').run(at.toISOString()).changes
+      return { previews, measurements, importDrafts }
     })
   }
 

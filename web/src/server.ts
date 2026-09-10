@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { loadConfig, type Config } from './config.js'
 import { AppDb, asJson, sha } from './db.js'
 import { BridgeCapacityError, Engine, PolicyServiceUnavailableError, PolicyValidationError } from './engine.js'
-import { dashboard, deleteAccountPage, deletedAccountPage, exposureDetails, h, helpPage, jobPage, landing, page, policyEditor, previewPage, privacyPage,
+import { aboutPage, dashboard, deleteAccountPage, deletedAccountPage, exposureDetails, h, helpPage, jobPage, landing, page, policyEditor, policyImportPage, policyImportReviewPage, previewPage, privacyPage,
   profileUrl, safeAvatarUrl } from './html.js'
 import { hasRpcPermission, OAuthAccounts } from './oauth.js'
 import { bsky38Policy, buildGuidedPolicy, poastersPolicy, type GuidedPolicy } from './policy-editor.js'
@@ -44,7 +44,7 @@ async function body(req: IncomingMessage) {
   let raw = ''
   for await (const chunk of req) {
     raw += chunk
-    if (raw.length > 256 * 1024) throw new RequestError('The submitted form is too large.', 413)
+    if (Buffer.byteLength(raw, 'utf8') > 768 * 1024) throw new RequestError('The submitted form is too large.', 413)
   }
   return new URLSearchParams(raw)
 }
@@ -204,11 +204,14 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
   })
   privacy.reconcileRestore()
   db.pruneExpiredUserData()
-  const css = await readFile(join(fileURLToPath(new URL('..', import.meta.url)), 'public', 'app.css'), 'utf8')
+  const webRoot = fileURLToPath(new URL('..', import.meta.url))
+  const vendorRoot = join(webRoot, '..', 'vendor', 'neutral-instruments')
+  const css = await readFile(join(vendorRoot, 'neutral.css'), 'utf8') + '\n' +
+    await readFile(join(webRoot, 'public', 'app.css'), 'utf8')
   const js = await readFile(join(fileURLToPath(new URL('..', import.meta.url)), 'public', 'app.js'), 'utf8')
   const socialCard = await readFile(join(fileURLToPath(new URL('..', import.meta.url)), 'public', 'social-card.png'))
   const server = createServer(async (req, res) => {
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' https://cdn.bsky.app; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; font-src 'self'; img-src 'self' https://cdn.bsky.app; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
@@ -242,9 +245,17 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         return send(res, 200, '{"status":"ready"}', 'application/json')
       }
       if (req.method === 'GET' && url.pathname === '/app.css') return send(res, 200, css, 'text/css; charset=utf-8')
+      const fontMatch = url.pathname.match(/^\/fonts\/(IBMPlexSans-Regular|IBMPlexSans-SemiBold|IBMPlexMono-Regular|SourceSerif4-Bold)\.woff2$/)
+      if (req.method === 'GET' && fontMatch) {
+        const font = await readFile(join(vendorRoot, 'fonts', `${fontMatch[1]}.woff2`))
+        res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'public, max-age=31536000, immutable',
+          'Content-Length': font.length })
+        return res.end(font)
+      }
       if (req.method === 'GET' && url.pathname === '/app.js') return send(res, 200, js, 'text/javascript; charset=utf-8')
       if (req.method === 'GET' && url.pathname === '/social-card.png') return send(res, 200, socialCard, 'image/png')
       if (req.method === 'GET' && url.pathname === '/help') return send(res, 200, helpPage(account, csrf))
+      if (req.method === 'GET' && url.pathname === '/about') return send(res, 200, aboutPage(account, csrf))
       if (req.method === 'GET' && url.pathname === '/privacy') return send(res, 200, privacyPage(account, csrf))
       if (req.method === 'GET' && url.pathname === '/oauth-client-metadata.json') {
         return send(res, 200, JSON.stringify(auth.metadata), 'application/json')
@@ -379,17 +390,40 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           const subject = resolved[actor]
           if (!subject || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subject)) throw new RequestError('That account could not be resolved to a DID.')
           const enabled = form.get('enabled') === '1'
-          await service.engine.override(did, subject, kind, enabled)
-          try {
-            if (enabled) {
-              db.sql.prepare('INSERT OR REPLACE INTO account_exceptions (did,subject,kind,handle,created_at) VALUES (?,?,?,?,?)')
-                .run(did, subject, kind, actor === subject ? '' : actor, new Date().toISOString())
-            } else {
-              db.sql.prepare('DELETE FROM account_exceptions WHERE did=? AND subject=? AND kind=?').run(did, subject, kind)
-            }
-          } catch { db.audit(did, 'override_handle_cache_failed', { subject, kind }) }
-          db.audit(did, 'override_changed', { subject, kind, enabled })
+          await service.setAccountRule(did, subject, kind as 'exempt' | 'allow' | 'keep_muted', enabled,
+            actor === subject ? '' : actor)
           return redirect(res, '/app')
+        }
+        if (url.pathname === '/policies/import/validate') {
+          const document = form.get('document') ?? ''
+          const target = (form.get('target') ?? '').trim() || undefined
+          try {
+            const draft = await service.createImportDraft(did, document, target, form.get('name') ?? undefined)
+            return redirect(res, `/policy-imports/${draft.id}`)
+          } catch (error) {
+            const targetPolicy = target ? service.owned<Record<string, unknown>>('policies', target, did) : undefined
+            return send(res, 400, policyImportPage(account!, csrf,
+              targetPolicy ? { id: String(targetPolicy.id), name: String(targetPolicy.name) } : undefined,
+              error instanceof Error ? error.message : 'The portable policy could not be validated.', document))
+          }
+        }
+        const confirmImport = url.pathname.match(/^\/policy-imports\/([^/]+)\/confirm$/)
+        if (confirmImport) {
+          if (form.get('confirm') !== 'replace') throw new RequestError('Confirm the import before replacing policy state.')
+          const policyId = await service.confirmImport(did, confirmImport[1]!)
+          return redirect(res, `/policies/${policyId}`)
+        }
+        const previewImport = url.pathname.match(/^\/policy-imports\/([^/]+)\/preview$/)
+        if (previewImport) {
+          const previewId = await service.previewImportDraft(did, previewImport[1]!)
+          return redirect(res, `/previews/${previewId}`)
+        }
+        const exportMatch = url.pathname.match(/^\/policies\/([^/]+)\/export$/)
+        if (exportMatch) {
+          const exported = await service.exportPolicy(did, exportMatch[1]!)
+          res.writeHead(200, { 'Content-Type': 'application/yaml; charset=utf-8', 'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="atproto-acl-policy.yaml"' })
+          return res.end(exported.document)
         }
         if (url.pathname === '/signout') {
           db.deleteSession(jar.acl_session)
@@ -462,11 +496,10 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
         let exceptions: Record<string, unknown>[] = []
         let exceptionsAvailable = true
         try {
-          const authoritative = await service.engine.overrides(did)
-          const cached = db.sql.prepare('SELECT subject,kind,handle FROM account_exceptions WHERE did=?').all(did) as Record<string, unknown>[]
-          const handles = new Map(cached.map(item => [`${item.subject}\u0000${item.kind}`, String(item.handle ?? '')]))
-          exceptions = Object.entries(authoritative).flatMap(([kind, subjects]) => subjects.map(subject => ({
-            subject, kind, handle: handles.get(`${subject}\u0000${kind}`) ?? '',
+          const authoritative = await service.accountRules(did)
+          const kinds = { leave_alone: 'exempt', always_keep: 'allow', never_unmute: 'keep_muted' } as const
+          exceptions = Object.entries(authoritative.rules).flatMap(([name, entries]) => entries.map(item => ({
+            subject: item.did, kind: kinds[name as keyof typeof kinds], handle: item.last_known_handle ?? '',
           }))).sort((a, b) => String(a.subject).localeCompare(String(b.subject)))
         } catch { exceptionsAvailable = false }
         return send(res, 200, dashboard(account, csrf, service.listPolicies(did), service.listJobs(did), service.listYieldReports(did), exceptions, exceptionsAvailable))
@@ -486,6 +519,18 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           name: useBsky38 ? 'Bsky38 quiet mode' : useExample ? 'Poasters Quarantine' : 'My feed policy',
           body: useBsky38 ? bsky38Policy(account.did) : poastersPolicy(account.did),
         }))
+      }
+      if (req.method === 'GET' && url.pathname === '/policies/import') {
+        return send(res, 200, policyImportPage(account, csrf))
+      }
+      const policyImportMatch = url.pathname.match(/^\/policies\/([^/]+)\/import$/)
+      if (req.method === 'GET' && policyImportMatch) {
+        const policy = service.owned<Record<string, unknown>>('policies', policyImportMatch[1]!, did)
+        return send(res, 200, policyImportPage(account, csrf, { id: String(policy.id), name: String(policy.name) }))
+      }
+      const importReviewMatch = url.pathname.match(/^\/policy-imports\/([^/]+)$/)
+      if (req.method === 'GET' && importReviewMatch) {
+        return send(res, 200, policyImportReviewPage(account, csrf, service.importDraft(did, importReviewMatch[1]!)))
       }
       const policyMatch = url.pathname.match(/^\/policies\/([^/]+)$/)
       if (req.method === 'GET' && policyMatch) {

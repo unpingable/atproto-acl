@@ -10,12 +10,15 @@ from dataclasses import asdict
 import json
 import platform
 import sys
+import yaml
 
 from . import __version__
 from .labels import LabelProvider
 from .model import Coverage, EvidenceSet, Observation, utcnow
 from .network import Client, NetworkError
 from .policy import PolicyError, compile_policy
+from .portable import (export_portable_document, parse_portable_document,
+                       runtime_account_rules)
 from .runtime import build_receipt
 from .store import StateError, Store
 
@@ -40,7 +43,14 @@ def _preview(message):
             if resolve(configured) != account:
                 raise StateError("policy account does not match authenticated account")
             state.pin(configured, account)
-            overrides = state.overrides()
+            supplied = message.get("override_snapshot")
+            if supplied is None:
+                overrides = state.overrides()
+            else:
+                expected = {"exempt", "allow", "keep_muted"}
+                if not isinstance(supplied, dict) or set(supplied) != expected:
+                    raise StateError("override snapshot is incomplete")
+                overrides = {kind: set(values) for kind, values in supplied.items()}
             for layer in overrides:
                 for actor in policy.config[layer]:
                     did = resolve(actor)
@@ -119,6 +129,10 @@ def _preview(message):
                 message.get("now") or utcnow(),
             )
             receipt["acquisition_hash"] = message.get("acquisition_hash")
+            if message.get("account_rules_hash"):
+                receipt["account_rules_hash"] = message["account_rules_hash"]
+            if message.get("portable_behavior_hash"):
+                receipt["portable_behavior_hash"] = message["portable_behavior_hash"]
             state.save_receipt(receipt)
             return receipt
     finally:
@@ -142,6 +156,52 @@ def _list_overrides(message):
             return {kind: sorted(values) for kind, values in state.overrides().items()}
     finally:
         state.close()
+
+
+def _replace_overrides(message):
+    state = Store(message["state"], message["account"], "live")
+    try:
+        with state.lock():
+            values = state.replace_overrides(
+                message["overrides"], message.get("revision"),
+                message.get("account_rules_hash"),
+            )
+            return {kind: sorted(dids) for kind, dids in values.items()}
+    finally:
+        state.close()
+
+
+def _inspect_portable(message):
+    document = parse_portable_document(message["document"])
+    return {
+        "enveloped": document.enveloped,
+        "provenance": document.provenance,
+        "policy_source": yaml.safe_dump(document.policy.config, sort_keys=False, allow_unicode=True),
+        "policy_config": document.policy.config,
+        "policy_hash": document.policy.policy_hash,
+        "policy_source_hash": document.policy.source_hash,
+        "account_rules": {name: [dict(entry) for entry in entries]
+                          for name, entries in document.account_rules.items()},
+        "runtime_account_rules": {kind: sorted(dids) for kind, dids in
+                                  runtime_account_rules(document.account_rules).items()},
+        "account_rules_hash": document.account_rules_hash,
+        "portable_behavior_hash": document.portable_behavior_hash,
+    }
+
+
+def _export_portable(message):
+    document = export_portable_document(
+        policy_source=message["policy"],
+        policy_name=message["policy_name"],
+        policy_revision=int(message["policy_revision"]),
+        exporter_version=__version__,
+        exported_at=message.get("exported_at") or utcnow(),
+        account_rules=message["account_rules"],
+    )
+    parsed = parse_portable_document(document)
+    return {"document": document, "policy_hash": parsed.policy.policy_hash,
+            "account_rules_hash": parsed.account_rules_hash,
+            "portable_behavior_hash": parsed.portable_behavior_hash}
 
 
 def _begin(message):
@@ -188,6 +248,12 @@ def handle(message):
         return _override(message)
     if command == "list_overrides":
         return _list_overrides(message)
+    if command == "replace_overrides":
+        return _replace_overrides(message)
+    if command == "inspect_portable":
+        return _inspect_portable(message)
+    if command == "export_portable":
+        return _export_portable(message)
     if command == "begin_action":
         return _begin(message)
     if command == "finish_action":
