@@ -24,3 +24,6 @@ access.
 - Evaluate moderation-list and feed-filter adapters with explicit ownership.
 - Qualify a currently maintained self-hosted PDS.
 - Add policy packs only when their observation and ownership semantics are clear.
+- Research deterministic negative-attention policies, beginning with
+  [reply-thread suppression by root author](docs/design/negative-attention-policy.md),
+  without coupling ACL to speculative discourse inference.
