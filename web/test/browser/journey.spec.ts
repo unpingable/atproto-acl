@@ -5,6 +5,7 @@ async function signIn(page: Page, handle: string, grantModeration = true) {
   await page.goto('/')
   await page.getByLabel('Handle').fill(handle)
   await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('link', { name: 'Continue to authorization' }).click()
   await expect(page.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
   await expect(page.getByText(`@${handle}`, { exact: true }).first()).toBeVisible()
   const moderationReconnect = page.getByRole('heading', { name: 'Reconnect to enable moderation' })
@@ -27,6 +28,19 @@ test('landing publishes a fetchable large social preview', async ({ page }) => {
   await page.getByRole('banner').getByRole('link', { name: 'How it works' }).click()
   await expect(page.getByRole('heading', { name: 'How this works' })).toBeVisible()
   await expect(page.getByText(/a university research group that tracks public posting volume/)).toBeVisible()
+})
+
+test('sign-in uses an explicit no-referrer cross-origin handoff', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('Handle').fill('user1.test')
+  const submitted = page.waitForResponse(response =>
+    response.url().endsWith('/oauth/start') && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Continue' }).click()
+  expect((await submitted).headers()['referrer-policy']).toBe('no-referrer')
+  const handoff = page.getByRole('link', { name: 'Continue to authorization' })
+  await expect(handoff).toHaveAttribute('rel', 'noreferrer')
+  await handoff.click()
+  await expect(page.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
 })
 
 test('open beta admits a new account as preview-only', async ({ page }) => {
@@ -77,6 +91,7 @@ test('a second landing page does not expire an existing sign-in form', async ({ 
   await second.goto('/')
   await first.getByLabel('Handle').fill('user1.test')
   await first.getByRole('button', { name: 'Continue' }).click()
+  await first.getByRole('link', { name: 'Continue to authorization' }).click()
   await expect(first.getByRole('heading', { name: 'Your feed policies' })).toBeVisible()
   await context.close()
 })

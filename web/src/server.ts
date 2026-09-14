@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { loadConfig, type Config } from './config.js'
 import { AppDb, asJson, sha } from './db.js'
 import { BridgeCapacityError, Engine, PolicyServiceUnavailableError, PolicyValidationError } from './engine.js'
-import { aboutPage, dashboard, deleteAccountPage, deletedAccountPage, exposureDetails, h, helpPage, jobPage, landing, page, policyEditor, policyImportPage, policyImportReviewPage, previewPage, privacyPage,
+import { aboutPage, authorizationHandoff, dashboard, deleteAccountPage, deletedAccountPage, exposureDetails, h, helpPage, jobPage, landing, page, policyEditor, policyImportPage, policyImportReviewPage, previewPage, privacyPage,
   profileUrl, safeAvatarUrl } from './html.js'
 import { hasRpcPermission, OAuthAccounts } from './oauth.js'
 import { bsky38Policy, buildGuidedPolicy, poastersPolicy, type GuidedPolicy } from './policy-editor.js'
@@ -278,7 +278,11 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           if (!/^[a-zA-Z0-9.-]{3,253}$/.test(handle)) throw new RequestError('Enter a valid account handle.')
           const attempt = admissions.begin({ inviteCode: form.get('invite_code') ?? undefined })
           const target = await auth.authorize(handle, attempt.state)
-          return redirect(res, target.toString())
+          // Chromium applies form-action to redirects after a form POST, so
+          // form-action 'self' deliberately blocks a direct external OAuth
+          // redirect. Make the origin transition an explicit navigation.
+          res.setHeader('Referrer-Policy', 'no-referrer')
+          return send(res, 200, authorizationHandoff(target))
         }
         if (!session || !db.checkCsrf(session, form.get('csrf') ?? undefined) || form.get('csrf') !== csrf) {
           return send(res, 403, page('Request refused', '<section class="title"><div><h1>Your session expired</h1><p>Nothing was changed. Sign in again and repeat what you were doing.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))

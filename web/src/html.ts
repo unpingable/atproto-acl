@@ -149,6 +149,13 @@ ${admissionMode === 'invite' ? '<label for="invite_code">Invite code <span class
 <section class="portable-callout"><div><p class="eyebrow">No lock-in</p><h2>Your policy is portable.</h2><p>Download human-readable YAML, import it here, or run it with the standalone CLI. If this service disappears, your intended policy—including account-specific rules—still works locally.</p></div><p><code>WEB UI ↔ ACL.YAML ↔ CLI</code></p></section>`)
 }
 
+export function authorizationHandoff(target: URL) {
+  return page('Continue to sign in', `
+<section class="title"><div><p class="eyebrow">Bluesky authorization</p><h1>Continue to your account provider.</h1>
+<p>You are leaving atproto-acl to approve read-only access on your account provider’s page. atproto-acl never receives your password.</p>
+<p class="actions"><a class="button" href="${h(target.toString())}" rel="noreferrer">Continue to authorization</a><a href="/">Cancel</a></p></div></section>`)
+}
+
 function guidedSummary(guided: GuidedPolicy) {
   const scope = guided.sourceType === 'feeds' ? 'accounts from your Following and Discover feeds' :
     guided.sourceType === 'timeline' ? 'accounts from your recent Following feed' :

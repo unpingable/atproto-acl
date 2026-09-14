@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { aboutPage, exposureDetails, landing, policyImportPage, profileUrl, safeAvatarUrl, sampledPostUrl } from '../src/html.js'
+import { aboutPage, authorizationHandoff, exposureDetails, landing, policyImportPage, profileUrl, safeAvatarUrl, sampledPostUrl } from '../src/html.js'
 
 test('Bluesky investigation links are DID-bound and safely rendered', () => {
   assert.equal(profileUrl('did:plc:alice'), 'https://bsky.app/profile/did:plc:alice')
@@ -36,4 +36,11 @@ test('public furniture and portability are visible before account setup', () => 
   const imported = policyImportPage({ handle: 'person.test', did: 'did:plc:person' }, 'csrf')
   assert.match(imported, /Nothing is replaced until you inspect the changes and confirm/)
   assert.match(imported, /Maximum decoded document size: 512 KiB/)
+})
+
+test('OAuth handoff makes the cross-origin navigation explicit and suppresses referrers', () => {
+  const rendered = authorizationHandoff(new URL('https://pds.example/authorize?request=secret'))
+  assert.match(rendered, /Continue to your account provider/)
+  assert.match(rendered, /href="https:\/\/pds\.example\/authorize\?request=secret" rel="noreferrer"/)
+  assert.doesNotMatch(rendered, /http-equiv="refresh"/)
 })
