@@ -23,6 +23,20 @@ Bob's unrelated garden post and Carol's reply there remain visible. This is a
 user-controlled attention rule, not moderation of Alice and not a claim that
 Alice did anything wrong.
 
+Actor mute cannot express this, in either direction:
+
+- Muting Alice is over-broad (her garden posts disappear too) and
+  under-broad (Carol's quote of Alice's new thread still arrives).
+- Muting Bob and Carol punishes respondents for one conversation and does
+  nothing about the next thread Alice starts with fresh participants.
+- Muting every participant of each unwanted thread scales the punishment
+  with thread size, not with the user's actual objection.
+
+The object of the policy is the conversation tree, not any actor. An
+enforcement path that resolves lineage rules to per-account mutes has
+collapsed the primitive back into ordinary muting; that is a bug, not a
+fallback.
+
 The narrow first rule to investigate is approximately:
 
 ```yaml
@@ -64,6 +78,26 @@ root record. That establishes declared lineage, not content validity or causal
 origin. Malformed, absent, contradictory, or truncated relationship data must
 produce an explicit unresolved standing under the selected mode; it must not
 silently become either visible-by-proof or suppressed-by-guess.
+
+## Structural lineage versus inferred propagation
+
+Two kinds of connection must never be conflated.
+
+**Structural lineage** is carried by the protocol: reply `root`/`parent` AT
+URIs, repost subjects, and quote targets recorded in the records and views
+themselves. These edges are factual — present, absent, or malformed (the
+explicit unresolved standing above) — and they are the only admissible input
+to deterministic suppression.
+
+**Inferred propagation** is correlation without a protocol edge: semantic or
+framing similarity, temporal coincidence, shared vocabulary, or
+co-occurrence across feed neighborhoods. Such patterns may be real, but they
+are hypotheses about influence, not edges in a record. They must never be
+silently promoted to lineage, and they are **not a currently admissible
+input** to any suppression rule: qualifying them is unresolved research, not
+an existing capability. If that research ever matures, inferred edges enter
+only as qualified evidence behind a user-ratified rule — never as a direct
+suppression signal.
 
 ## Fit with current ACL architecture
 
@@ -154,6 +188,13 @@ not hidden service-only intent.
   preview/approval, ownership, and local portability?
 - How are cached handles displayed after rename without changing the DID-bound
   policy?
+- What half-life, if any, should a quench rule have: permanent until removed,
+  decaying unless re-confirmed, or time-bound by default?
+- What is the per-surface scope: one policy applied uniformly across Home,
+  Discover, and generator feeds, or rules the user can scope per surface?
+- How is suppression presented: a collapsed, countable, expandable
+  placeholder (“3 posts hidden by your thread-origin policy”) rather than
+  silent removal, and what exactly does expanding it reveal?
 
 ## Qualification cases
 
@@ -202,6 +243,15 @@ recommender. Future candidates include:
   replacement recommender;
 - eventually, evidence-informed propagation rules.
 
+Adaptive behavior has a hard boundary: learned machinery may **propose**
+quench rules for user ratification, expressed in the same human-readable
+vocabulary as user-authored rules and shown with the evidence behind each
+proposal. It must never suppress items directly through opaque per-post or
+per-account scores. Every suppressed item must trace to a ratified,
+inspectable rule with a reason the user could have written themselves;
+score-only suppression is out of scope for this design, not merely
+unimplemented.
+
 Only explicit ATProto relationships belong in the deterministic first tranche.
 Semantic derivatives and broker inference require substantially stronger
 evidence and remain separate research.
@@ -220,6 +270,13 @@ inferred discourse-propagation policy
 
 ACL must remain useful and correct when Observatory is absent, stale,
 indeterminate, or never implements that research.
+
+Observatory outputs must never become a universal reputation ranking of
+accounts, and ACL must not consume them as one. Structural edges are factual
+observations. Inferred edges, if they are ever admitted at all, arrive as
+per-episode evidence carrying qualification, confidence, coverage, and
+provenance — material a user can inspect behind a ratified rule, not scores
+that rank people.
 
 ## Resume point
 
