@@ -2,7 +2,9 @@
 
 Status: **BACKLOG / DESIGN RESEARCH — NOT IMPLEMENTED**  
 Working terms: **anti-algorithm**, **negative attention policy**, **origin
-mute**  
+mute**, **quench** — “quench it rather than ban it”: reduce routed exposure
+to a class of material without banning or morally classifying the people
+producing it  
 Recorded: 2026-09-13
 
 This note preserves a product and policy distinction. It does not authorize a
@@ -190,6 +192,14 @@ recommender. Future candidates include:
 - suppress attributable quote cascades;
 - “I've seen enough”: hide later descendants or derivatives;
 - suppress material arriving through selected discourse brokers;
+- adaptive quenching: learn from the user's repeated rejection of a source,
+  lineage, or propagation neighborhood across Home, Discover, and custom
+  feeds, and progressively tighten suppression of that class rather than
+  requiring the user to enumerate every account or phrase; any learned rule
+  must remain inspectable, explicable (“suppressed because this thread
+  originates from X / matches a repeatedly rejected propagation
+  neighborhood”), and reversible, so the mechanism never becomes an opaque
+  replacement recommender;
 - eventually, evidence-informed propagation rules.
 
 Only explicit ATProto relationships belong in the deterministic first tranche.
