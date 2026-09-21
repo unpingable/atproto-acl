@@ -10,7 +10,7 @@ import { Worker } from '../src/worker.js'
 import { bsky38Policy } from '../src/policy-editor.js'
 import { loadConfig } from '../src/config.js'
 import { ServiceControls } from '../src/controls.js'
-import { acquisition, FakeAccounts, observations, policy } from './fixtures.js'
+import { acquisition, FakeAccounts, fixtureCheckedAt, fixtureExpiresAt, fixtureNow, fixtureObservedAt, observations, policy } from './fixtures.js'
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'acl-web-'))
@@ -181,10 +181,10 @@ test('followed matches require their own exact approval and execute from the sav
     identities: { [did]: did },
     observations: subjects.map(subject => ({
       provider: 'did:plc:activity', subject, property: 'posts_per_day', value: 24,
-      observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
+      observed_at: fixtureObservedAt, expires_at: fixtureExpiresAt,
     })),
     coverage: subjects.map(subject => ({ provider: 'did:plc:activity', subject, complete: true,
-      checked_at: '2026-09-08T12:01:00Z', reason: '' })),
+      checked_at: fixtureCheckedAt, reason: '' })),
     discovery: [{ source: 'feed_exposure', surface: 'timeline', subjects, complete: true }],
     remote: Object.fromEntries(subjects.map(subject => [subject, {
       ...(state.get(subject) ?? { known: true, direct: false, muted: false }),
@@ -192,7 +192,7 @@ test('followed matches require their own exact approval and execute from the sav
     }])),
   })
   const policyId = service.savePolicy(did, 'feed', feedPolicy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   const rows = Object.fromEntries(preview.receipt.rows.map(row => [row.subject, row]))
   assert.equal(rows['did:plc:alice'].action, 'follow_review_candidate')
   assert.equal(rows['did:plc:bob'].action, 'mute')
@@ -222,7 +222,7 @@ test('followed matches require their own exact approval and execute from the sav
 test('preview composes allow over quarantine and retains indeterminate evidence', async () => {
   const { db, service } = setup()
   const id = service.savePolicy('did:plc:user1', 'test', policy('did:plc:user1'))
-  const preview = await service.preview('did:plc:user1', id, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview('did:plc:user1', id, undefined, fixtureNow)
   const rows = Object.fromEntries(preview.receipt.rows.map(row => [row.subject, row]))
   assert.equal(rows['did:plc:alice'].action, 'mute')
   assert.equal(rows['did:plc:bob'].desired, 'no_quarantine_justification')
@@ -239,7 +239,7 @@ test('exact approval is idempotent, executes, and separately reviews release', a
     known: true, direct: false, muted: false, handle: 'alice.test', display_name: 'Alice',
   })
   const policyId = service.savePolicy(did, 'test', policy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   const job = service.approve(did, preview.id, 'apply', ['did:plc:alice'])
   assert.equal(service.approve(did, preview.id, 'apply', ['did:plc:alice']), job)
   const details = service.jobDetails(did, job)
@@ -278,7 +278,7 @@ test('exact approval is idempotent, executes, and separately reviews release', a
   assert.equal((service.owned('jobs', job, did) as any).status, 'completed')
 
   service.savePolicy(did, 'test', policy(did, 999), policyId)
-  const release = await service.preview(did, policyId, undefined, '2026-09-08T12:03:00Z')
+  const release = await service.preview(did, policyId, undefined, fixtureNow)
   const row = release.receipt.rows.find(item => item.subject === 'did:plc:alice')!
   assert.equal(row.action, 'release_candidate')
   const releaseJob = service.approve(did, release.id, 'release', ['did:plc:alice'])
@@ -292,7 +292,7 @@ test('preview-only accounts cannot create an approval or job', async () => {
   const { db, service } = setup()
   const did = 'did:plc:user1'
   const policyId = service.savePolicy(did, 'test', policy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   db.sql.prepare('UPDATE admissions SET writes_enabled=0 WHERE did=?').run(did)
   assert.throws(() => service.approve(did, preview.id, 'apply', ['did:plc:alice']), /not enabled/)
   assert.equal((db.sql.prepare('SELECT count(*) count FROM approvals WHERE did=?').get(did) as { count: number }).count, 0)
@@ -304,7 +304,7 @@ test('resources are account isolated and stale preview cannot be approved', asyn
   const { db, service } = setup()
   const policyId = service.savePolicy('did:plc:user1', 'test', policy('did:plc:user1'))
   assert.throws(() => service.owned('policies', policyId, 'did:plc:user2'), /not found/)
-  const preview = await service.preview('did:plc:user1', policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview('did:plc:user1', policyId, undefined, fixtureNow)
   assert.throws(() => service.owned('previews', preview.id, 'did:plc:user2'), /not found/)
   service.savePolicy('did:plc:user1', 'changed', policy('did:plc:user1', 30), policyId)
   assert.throws(() => service.approve('did:plc:user1', preview.id, 'apply', ['did:plc:alice']), /policy changed/)
@@ -319,7 +319,7 @@ test('effect followed by transport failure remains uncertain across recovery', a
     item.subject === 'did:plc:carol' && item.provider === 'did:plc:trusted').complete = true
   ;(service as any).fixtureAcquisition = () => acquired
   const policyId = service.savePolicy(did, 'test', policy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   const job = service.approve(did, preview.id, 'apply', ['did:plc:alice', 'did:plc:carol'])
   accounts.failAfterEffect.add('did:plc:alice')
   await worker.runNext()
@@ -348,7 +348,7 @@ test('operator write stop pauses an approved job before any remote effect', asyn
   const { db, accounts, service, worker, controls } = setup()
   const did = 'did:plc:user1'
   const policyId = service.savePolicy(did, 'test', policy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   const job = service.approve(did, preview.id, 'apply', ['did:plc:alice'])
   controls.set('writes', false, 'operator', 'controlled test')
   assert.equal(await worker.runNext(), false)
@@ -382,7 +382,7 @@ test('unexpected claimed-job failure reaches a terminal state', async () => {
   const { db, service, worker } = setup()
   const did = 'did:plc:user1'
   const policyId = service.savePolicy(did, 'test', policy(did))
-  const preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
   const job = service.approve(did, preview.id, 'apply', ['did:plc:alice'])
   worker.run = async () => { throw new Error('unexpected fixture failure') }
   await worker.runNext()
@@ -396,12 +396,12 @@ test('pre-existing mute is preserved and exemption removes automation jurisdicti
   const did = 'did:plc:user1'
   accounts.remote.get(did)!.set('did:plc:alice', { known: true, direct: true, muted: true })
   const policyId = service.savePolicy(did, 'test', policy(did))
-  let preview = await service.preview(did, policyId, undefined, '2026-09-08T12:02:00Z')
+  let preview = await service.preview(did, policyId, undefined, fixtureNow)
   let alice = preview.receipt.rows.find(row => row.subject === 'did:plc:alice')!
   assert.equal(alice.action, 'none')
   assert.match(alice.reason, /preserve existing/)
   await service.setAccountRule(did, 'did:plc:alice', 'exempt', true, 'alice.test')
-  preview = await service.preview(did, policyId, undefined, '2026-09-08T12:03:00Z')
+  preview = await service.preview(did, policyId, undefined, fixtureNow)
   alice = preview.receipt.rows.find(row => row.subject === 'did:plc:alice')!
   assert.equal(alice.action, 'none')
   assert.match(alice.reason, /no jurisdiction/)
