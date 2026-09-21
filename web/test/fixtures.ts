@@ -1,5 +1,14 @@
 import type { AccountClient, AccountProvider, Acquisition, RemoteState } from '../src/types.js'
 
+// Worker applicability checks intentionally use the real clock. Keep the
+// fixture evidence within a stable, live window so a saved preview and its
+// recheck continue to describe the same evidence whenever this suite runs.
+const fixtureEpoch = Date.now()
+export const fixtureNow = new Date(fixtureEpoch).toISOString()
+export const fixtureObservedAt = new Date(fixtureEpoch - 60 * 60 * 1000).toISOString()
+export const fixtureExpiresAt = new Date(fixtureEpoch + 24 * 60 * 60 * 1000).toISOString()
+export const fixtureCheckedAt = new Date(fixtureEpoch - 59 * 60 * 1000).toISOString()
+
 export class FakeAccounts implements AccountProvider {
   profiles = new Map<string, { did: string; handle: string; displayName?: string; pds?: string; scopes?: string[] }>()
   remote = new Map<string, Map<string, RemoteState>>()
@@ -90,7 +99,7 @@ export function acquisition(accounts: FakeAccounts, did: string, observations: a
     observations,
     coverage: subjects.flatMap(subject => providers.map(provider => ({
       provider, subject, complete: !(subject === 'did:plc:carol' && provider === 'did:plc:trusted'),
-      checked_at: '2026-09-08T12:01:00Z',
+      checked_at: fixtureCheckedAt,
       reason: subject === 'did:plc:carol' && provider === 'did:plc:trusted' ? 'publisher unavailable' : '',
     }))),
     discovery: [{ source: 'explicit_dids', subjects, complete: true }],
@@ -133,10 +142,10 @@ keep_muted: []
 export const observations = [
   ...['did:plc:alice', 'did:plc:bob', 'did:plc:carol'].map(subject => ({
     provider: 'did:plc:activity', subject, property: 'posts_per_day', value: 24,
-    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
+    observed_at: fixtureObservedAt, expires_at: fixtureExpiresAt,
   })),
   {
     provider: 'did:plc:trusted', subject: 'did:plc:bob', property: 'member', value: true,
-    observed_at: '2026-09-08T12:00:00Z', expires_at: '2026-09-20T12:00:00Z',
+    observed_at: fixtureObservedAt, expires_at: fixtureExpiresAt,
   },
 ]
