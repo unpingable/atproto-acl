@@ -12,7 +12,9 @@ export class AppDb {
   readonly sql: DatabaseSync
 
   constructor(path: string) {
-    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    const directory = dirname(path)
+    mkdirSync(directory, { recursive: true, mode: 0o700 })
+    chmodSync(directory, 0o700)
     this.sql = new DatabaseSync(path)
     chmodSync(path, 0o600)
     this.sql.exec(`

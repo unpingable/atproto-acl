@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { statSync } from 'node:fs'
+import { chmodSync, statSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -63,6 +63,14 @@ test('complete saved session survives process restart with owner-only database p
   const restored = await new DurableOAuthSessionCustody(reopened).sessionStore.get(did)
   assert.deepEqual(restored, JSON.parse(JSON.stringify(session)))
   reopened.close()
+})
+
+test('opening custody repairs an overly broad pre-existing data-directory mode', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'acl-oauth-permissions-'))
+  chmodSync(dir, 0o755)
+  const db = new AppDb(join(dir, 'app.db'))
+  assert.equal(statSync(dir).mode & 0o777, 0o700)
+  db.close()
 })
 
 test('refresh intent and successor session commit atomically, and next restore uses successor', async () => {
