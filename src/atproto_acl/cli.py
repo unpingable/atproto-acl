@@ -79,6 +79,10 @@ def render(data, format):
         lines.append(f"{row['subject']}  {row['desired']}  {row['action']}\n  {row['reason']}")
         if row.get("disposition_reasons"):
             lines.append("  policy: " + ", ".join(row["disposition_reasons"]))
+    if data.get("lineage_rows"):
+        lines += ["", "thread-lineage preview (local attention policy; no actor action):"]
+        for row in data["lineage_rows"]:
+            lines.append(f"{row.get('post_uri', 'unknown post')}  {row['outcome']}  {row['action']}\n  {row['reason']}")
     if data.get("executions"):
         lines += ["", json.dumps(data["executions"], indent=2)]
     return "\n".join(lines)

@@ -25,6 +25,10 @@ export type FeedItemSummary = {
   author_handle?: string
   introducer_did?: string
   introducer_handle?: string
+  parent_uri?: string
+  root_uri?: string
+  lineage_uri?: string
+  lineage_status?: 'root' | 'reply' | 'unknown' | 'malformed' | 'conflict'
 }
 
 export type FeedExposure = {
@@ -39,6 +43,10 @@ export type FeedExposure = {
   path: string
   position: number
   acquired_at: string
+  parent_uri?: string
+  root_uri?: string
+  lineage_uri?: string
+  lineage_status?: 'root' | 'reply' | 'unknown' | 'malformed' | 'conflict'
 }
 
 export type FeedSample = {
@@ -110,6 +118,19 @@ export type Receipt = {
     members?: Array<Record<string, unknown>> }>
   completeness?: Record<string, boolean>
   rows: ReceiptRow[]
+  lineage_rows?: Array<{
+    post_uri: string
+    post_cid?: string
+    author_did?: string
+    surface?: 'timeline' | 'generator'
+    lineage_uri?: string
+    lineage_status: 'root' | 'reply' | 'unknown' | 'malformed' | 'conflict'
+    outcome: 'suppress' | 'allow' | 'indeterminate'
+    action: 'suppress' | 'none'
+    reason_code: string
+    reason: string
+    rule?: { type: 'suppress_lineage'; root_uri: string }
+  }>
   [key: string]: unknown
 }
 

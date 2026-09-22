@@ -20,6 +20,14 @@ Fixture tests use synthetic identities and block network access. They do not pro
 interoperability with a real authorization server, PDS, AppView, feed generator,
 or label publisher.
 
+The exact-lineage Quench tranche is fixture-qualified through the real hosted
+feed-exposure extractor and policy/receipt/preview path. It covers roots,
+replies, reposted replies, multiple actors in one lineage, the same actor in an
+unrelated lineage, missing/malformed/conflicting roots, portable round trips,
+and separation from actor actions. No retained privacy-safe live feed snapshot
+with reply roots was available, so repeated-lineage prevalence in Home or
+Discover and client-side enforcement remain unqualified.
+
 ## Live claims
 
 A release may be described as live-qualified only when its private acceptance

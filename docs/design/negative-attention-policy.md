@@ -1,11 +1,17 @@
 # Negative-attention policy: reply lineage by root author
 
-Status: **BACKLOG / DESIGN RESEARCH — NOT IMPLEMENTED**  
+Status: **DESIGN RESEARCH; exact-lineage preview primitive implemented, enforcement not implemented**
 Working terms: **anti-algorithm**, **negative attention policy**, **origin
 mute**, **quench** — “quench it rather than ban it”: reduce routed exposure
 to a class of material without banning or morally classifying the people
 producing it  
 Recorded: 2026-09-13
+
+Implementation note (2026-09-22): the narrow exact-root preview contract is
+specified in [quench-exact-lineage-v1.md](quench-exact-lineage-v1.md). It adds
+deterministic extraction, policy portability, receipts, and explanation. It
+does not implement feed filtering or any actor-level action. The broader
+root-author and inferred-propagation designs below remain backlog research.
 
 This note preserves a product and policy distinction. It does not authorize a
 schema change, evaluator change, feed filter, UI, new service, ingestion,
@@ -285,4 +291,3 @@ the record-field/adapter questions above. Then specify a versioned policy and
 three-valued item-decision contract before changing the guided editor. No UI
 card should be built until the enforcement adapter and portable semantics are
 real enough to preview honestly.
-

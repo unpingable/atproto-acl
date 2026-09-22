@@ -35,6 +35,20 @@ export function exposureDetails(exposures: Array<Record<string, unknown>>) {
   return `<details class="exposure-links"><summary>Seen ${unique.length} times · view sampled posts</summary><ul>${list}</ul></details>`
 }
 
+function lineagePreview(receipt: Receipt) {
+  const rows = receipt.lineage_rows ?? []
+  if (!rows.length) return ''
+  const suppressed = rows.filter(row => row.outcome === 'suppress')
+  const unresolved = rows.filter(row => row.outcome === 'indeterminate')
+  const items = suppressed.map(row => {
+    const post = sampledPostUrl(row.post_uri)
+    return `<li><strong>Conversation suppressed</strong><p>${h(row.reason)}</p>${post ? `<a href="${h(post)}" target="_blank" rel="noopener noreferrer">View the sampled record that matched</a>` : ''}<p class="muted">This is a local thread-lineage decision. The author is not muted and remains eligible elsewhere.</p></li>`
+  }).join('')
+  const unknown = unresolved.length
+    ? `<p class="unresolved">${h(unresolved.length)} sampled item${unresolved.length === 1 ? '' : 's'} had insufficient or contradictory lineage data and were not suppressed.</p>` : ''
+  return `<section class="panel" aria-labelledby="lineage-preview"><h2 id="lineage-preview">Quenched conversations</h2><p>${h(suppressed.length)} sampled item${suppressed.length === 1 ? '' : 's'} matched an exact thread-root rule. This preview does not mute or block any account.</p>${items ? `<ul>${items}</ul>` : ''}${unknown}</section>`
+}
+
 export function page(title: string, body: string, account?: { handle: string; did: string }, csrf = '') {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -517,6 +531,7 @@ ${receipt.complete ? '' : '<span class="status needs_review">partial scan</span>
 <div class="metrics"><div><strong>${rows.length}</strong><span>accounts checked</span></div><div><strong>${usable}</strong><span>had posting data</span></div><div><strong>${toReview}</strong><span>for you to review</span></div></div>
 ${incompleteText.length ? `<div role="status" class="notice">${h(incompleteText.join(' '))} When the app isn’t sure, it leaves the account alone.</div>` : ''}
 ${feedStanding}
+${lineagePreview(receipt)}
 ${sourceNote}
 ${account.writesEnabled === false && toReview ? '<div class="notice preview-only"><strong>This is a preview.</strong><p>You can inspect every result, but this beta account cannot approve mute or unmute actions.</p></div>' : ''}
 <form method="get"><label for="q">Search these results</label><div class="search"><input id="q" name="q" value="${h(query)}"><button class="quiet">Search</button></div></form>
