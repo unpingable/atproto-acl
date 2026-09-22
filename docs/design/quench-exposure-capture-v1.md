@@ -22,16 +22,27 @@ credentials, headers, and OAuth token material. The sanitizer constructs a new
 allowlisted object from the existing bounded feed extractor; it never serializes
 the upstream response.
 
-Capture uses an existing OAuth session only when it already grants
-`app.bsky.feed.getTimeline` and `app.bsky.feed.getFeed` and its access token has
-at least ten minutes remaining. The guarded operator harness opens the
-application database read-only, restores without refresh, and refuses any
-refresh-token grant at the fetch boundary. It invokes no write RPC, creates no
-application preview, approval, job, or policy state, and makes at most one
-bounded Home and one bounded Discover acquisition. Credentials are used only
-in process and never enter the capture or its diagnostics. An expired or stale
-session requires a separate, explicitly authorized reconnect; the harness will
-not rotate OAuth state and lose the replacement in a read-only run.
+Capture uses the application's durable OAuth session custody and requires its
+existing grant to include `app.bsky.feed.getTimeline` and
+`app.bsky.feed.getFeed`. The guarded operator harness receives only the DID; it
+does not receive raw tokens. Expired access credentials may be refreshed under
+the application's per-account cross-process lock. The complete successor
+session, including the rotated refresh token and private DPoP material, is
+committed atomically before the official client returns it for use.
+
+The custody layer writes a refresh intent before sending a single-use refresh
+token. A crash between the token response and successor-session commit leaves
+that intent durable, and every later restore refuses with an indeterminate
+outcome instead of replaying the predecessor. The official client additionally
+revokes and deletes a successor if its store callback fails. A separate
+refresh-disabled diagnostic primitives remain available for inspections that must
+not alter credential custody.
+
+The bounded capture invokes no ATProto write RPC and creates no application
+preview, approval, job, or policy state. Its only permissible local mutation is
+OAuth credential custody required to preserve a rotated read grant. It makes at
+most one bounded Home and one bounded Discover acquisition. Credentials are
+used only in process and never enter the capture or its diagnostics.
 
 Analysis removes exact duplicate observation IDs deterministically. Home and
 Discover retain their own order. The combined view is explicitly ordered as the

@@ -111,6 +111,7 @@ const service = new AclService(db, new Engine(config), accounts,
 const auth = Object.assign(accounts, {
   metadata: { client_id: config.origin + '/oauth-client-metadata.json', fixture: true },
   jwks: { keys: [] },
+  clearSession: async () => {},
   authorize: async (handle: string, state: string, writeAccess = false) => new URL(`/oauth/callback?code=${encodeURIComponent(handle)}&state=${encodeURIComponent(state)}&access=${writeAccess ? 'write' : 'read'}`, config.origin),
   callback: async (params: URLSearchParams) => {
     const profile = [...accounts.profiles.values()].find(item => item.handle === params.get('code'))

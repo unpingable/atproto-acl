@@ -94,7 +94,7 @@ test('leave-mutes deletion removes all per-user application and derived engine s
   privacy.requestDeletion(did, 'leave_mutes')
   privacy.completeDeletion(did)
   const checks: Array<[string, string, string?]> = [
-    ['users', 'did'], ['web_sessions', 'did'], ['oauth_sessions', 'did'], ['policies', 'did'],
+    ['users', 'did'], ['web_sessions', 'did'], ['oauth_sessions', 'did'], ['oauth_refresh_intents', 'did'], ['policies', 'did'],
     ['previews', 'did'], ['yield_reports', 'did'], ['approvals', 'did'], ['jobs', 'did'],
     ['job_items', 'job_id', 'job'], ['audit', 'did'], ['account_deletions', 'did'],
     ['admissions', 'did'], ['invites', 'redeemed_did'], ['oauth_attempts', 'expected_did'], ['capacity_events', 'did'],

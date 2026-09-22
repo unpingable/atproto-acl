@@ -20,6 +20,7 @@ import { PrivacyManager } from './privacy.js'
 type Auth = AccountProvider & {
   authorize(handle: string, state: string, writeAccess?: boolean): Promise<URL>
   callback(params: URLSearchParams): Promise<{ session: { did: string }; state?: string | null }>
+  clearSession(did: string): Promise<void>
   metadata: unknown
   jwks: unknown
 }
@@ -298,7 +299,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
             db.audit(did, 'oauth_reconnect_started', { existing_mutes_remain: true })
           })
           try { await (await service.accounts.restore(did)).disconnect() } catch {}
-          db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
+          await auth.clearSession(did)
           res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
           return redirect(res, target.toString())
         }
@@ -440,7 +441,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
             db.audit(did, 'account_disconnected', { existing_mutes_remain: true })
           })
           try { await (await service.accounts.restore(did)).disconnect() } catch {}
-          db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
+          await auth.clearSession(did)
           res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
           return send(res, 200, page('Disconnected', '<section class="title"><div><h1>App disconnected</h1><p>This app can no longer read your feeds or change your mutes. Anyone you muted stays muted, and your policies and history are still here if you sign in again.</p><p><a class="button" href="/">Back to sign in</a></p></div></section>'))
         }
@@ -457,7 +458,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           if (standing.activeJobs) return send(res, 409, deleteAccountPage(account!, csrf, standing,
             'An action is still finishing. No new actions will start; return after its outcome is recorded.'))
           try { await (await service.accounts.restore(did)).disconnect() } catch {}
-          db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
+          await auth.clearSession(did)
           privacy.completeDeletion(did)
           res.setHeader('Set-Cookie', [cookie('acl_session', '', config, 'HttpOnly; Max-Age=0'), cookie('acl_csrf', '', config, 'Max-Age=0')])
           return send(res, 200, deletedAccountPage())
@@ -472,7 +473,7 @@ export async function createApp(config: Config, db: AppDb, service: AclService, 
           admission = admissions.complete(result.state, callbackDid)
         } catch (error) {
           try { await (await service.accounts.restore(callbackDid)).disconnect() } catch {}
-          db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(callbackDid)
+          await auth.clearSession(callbackDid)
           throw error
         }
         const client = await service.accounts.restore(callbackDid)

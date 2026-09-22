@@ -38,6 +38,12 @@ export class AppDb {
       CREATE TABLE IF NOT EXISTS oauth_locks (
         key TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS oauth_refresh_intents (
+        did TEXT PRIMARY KEY,
+        prior_refresh_hash TEXT NOT NULL,
+        owner TEXT NOT NULL,
+        started_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS policies (
         id TEXT PRIMARY KEY, did TEXT NOT NULL REFERENCES users(did) ON DELETE CASCADE,
         name TEXT NOT NULL, body TEXT NOT NULL, revision INTEGER NOT NULL, source_hash TEXT NOT NULL,

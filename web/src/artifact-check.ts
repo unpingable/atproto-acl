@@ -72,7 +72,7 @@ const brokenDb = new AppDb(join(brokenConfig.dataDir, 'app.db'))
 const brokenEngine = new Engine(brokenConfig)
 const brokenService = new AclService(brokenDb, brokenEngine, accounts)
 const auth = Object.assign(accounts, {
-  metadata: {}, jwks: {},
+  metadata: {}, jwks: {}, clearSession: async () => {},
   authorize: async () => new URL('http://127.0.0.1/'),
   callback: async () => { throw new Error('offline') },
 })
