@@ -129,6 +129,7 @@ export type Receipt = {
     action: 'suppress' | 'none'
     reason_code: string
     reason: string
+    effect: 'local_feed_preview_only'
     rule?: { type: 'suppress_lineage'; root_uri: string }
   }>
   [key: string]: unknown

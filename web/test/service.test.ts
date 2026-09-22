@@ -170,6 +170,35 @@ test('a fully acquired configured feed sample is complete without claiming sourc
   db.close()
 })
 
+test('exact-lineage policy crosses acquisition, engine receipt, and hosted preview without actor effects', async () => {
+  const { db, accounts, service } = setup()
+  const did = 'did:plc:user1'
+  const root = 'at://did:plc:alice/app.bsky.feed.post/root'
+  const acquired = acquisition(accounts, did, observations) as any
+  acquired.discovery = [{ source: 'feed_exposure', surface: 'timeline', complete: true,
+    exposure_complete: true, subjects: ['did:plc:bob'], exposures: [], items: [
+      { position: 0, post_uri: 'at://did:plc:bob/app.bsky.feed.post/reply', post_cid: 'cid-reply',
+        author_did: 'did:plc:bob', root_uri: root, lineage_uri: root, lineage_status: 'reply' },
+      { position: 1, post_uri: 'at://did:plc:bob/app.bsky.feed.post/elsewhere', post_cid: 'cid-elsewhere',
+        author_did: 'did:plc:bob', root_uri: 'at://did:plc:bob/app.bsky.feed.post/elsewhere',
+        lineage_uri: 'at://did:plc:bob/app.bsky.feed.post/elsewhere', lineage_status: 'root' },
+    ] }]
+  acquired.remote['did:plc:bob'].relationship = 'not_following'
+  ;(service as any).fixtureAcquisition = () => acquired
+  const body = feedPolicy(did).replace(
+    'keep_muted: []',
+    `keep_muted: []\nattention:\n  suppress_lineages:\n    - ${root}`,
+  )
+  const policyId = service.savePolicy(did, 'Exact thread', body)
+  const preview = await service.preview(did, policyId, undefined, fixtureNow)
+  assert.deepEqual(preview.receipt.lineage_rows?.map(row => row.outcome), ['suppress', 'allow'])
+  assert.equal(preview.receipt.lineage_rows?.[0]?.effect, 'local_feed_preview_only')
+  assert.equal(preview.receipt.rows.find(row => row.subject === 'did:plc:bob')?.action, 'mute')
+  assert.equal(db.sql.prepare('SELECT count(*) count FROM approvals').get().count, 0)
+  assert.equal(db.sql.prepare('SELECT count(*) count FROM jobs').get().count, 0)
+  db.close()
+})
+
 test('followed matches require their own exact approval and execute from the saved sample', async () => {
   const { db, accounts, service, worker } = setup()
   const did = 'did:plc:user1'
