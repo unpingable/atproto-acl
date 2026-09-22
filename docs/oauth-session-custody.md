@@ -44,3 +44,9 @@ If callback settlement is uncertain, do not repeat it blindly. Inspect custody
 standing by DID and reconcile the same attempt. A retained refresh intent, an
 invalid/revoked session, a subject mismatch, or incomplete DPoP material all
 require explicit reauthorization.
+
+The saved-session JSON remains readable by the preceding release, but rollback
+is allowed only when `oauth_refresh_intents` is empty. An older release does not
+understand the intent journal and could replay a predecessor after an
+interrupted refresh. If an intent exists, keep the repaired custody path in
+place and reconcile or reauthorize; do not use code rollback as session repair.
