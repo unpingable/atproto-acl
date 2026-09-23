@@ -4,7 +4,7 @@ import {
   analyzeCapture,
   analyzeQuenchObservations,
   assertBodyFreeCapture,
-  assertExactCaptureSamples,
+  assessBoundedPrefixSamples,
   sanitizeFeedSample,
 } from '../src/quench-observation.js'
 
@@ -98,11 +98,27 @@ test('capture validation refuses credential and content-bearing fields', () => {
   assert.throws(() => assertBodyFreeCapture({ ...base, observations: [{ ...observation, text: 'not retained' }] }),
     /non-allowlisted/)
   assert.throws(() => assertBodyFreeCapture({ ...base, authorization: 'synthetic-canary' }), /forbidden field/)
+  assert.throws(() => assertBodyFreeCapture({ ...base, feed_results: {
+    home: { actual_count: 1, terminal_condition: 'normal_exhaustion', minimum_useful_sample: 1,
+      empirical_power: 'adequate' },
+    discover: { actual_count: 0, terminal_condition: 'requested_bound_reached', minimum_useful_sample: 1,
+      empirical_power: 'underpowered' },
+  } }), /feed result/)
 })
 
-test('coherent capture requires the exact bound on both feed samples', () => {
-  const sample = (count: number) => ({ items: Array.from({ length: count }, (_, position) => ({ position })) as any[] })
-  assert.doesNotThrow(() => assertExactCaptureSamples(sample(500), sample(500), 500))
-  assert.throws(() => assertExactCaptureSamples(sample(499), sample(500), 500), /incomplete/)
-  assert.throws(() => assertExactCaptureSamples(sample(500), sample(499), 500), /incomplete/)
+test('coherent capture accepts a bounded prefix or normal exhaustion and reports power', () => {
+  const sample = (count: number, complete = true, exhausted = count < 500) => ({
+    items: Array.from({ length: count }, (_, position) => ({ position })) as any[],
+    sample_complete: complete,
+    source_exhausted: exhausted,
+  })
+  assert.deepEqual(assessBoundedPrefixSamples(sample(0), sample(500), 500), {
+    home: { actual_count: 0, terminal_condition: 'normal_exhaustion', minimum_useful_sample: 100,
+      empirical_power: 'underpowered' },
+    discover: { actual_count: 500, terminal_condition: 'requested_bound_reached', minimum_useful_sample: 100,
+      empirical_power: 'adequate' },
+  })
+  assert.throws(() => assessBoundedPrefixSamples(sample(499, false), sample(500), 500), /incomplete/)
+  assert.throws(() => assessBoundedPrefixSamples(sample(499, true, false), sample(500), 500), /ambiguous pagination/)
+  assert.throws(() => assessBoundedPrefixSamples(sample(501, true, false), sample(500), 500), /incomplete/)
 })

@@ -25,17 +25,45 @@ export type QuenchCapture = {
   auth_mechanism: 'existing_atproto_oauth_read_session'
   writes_performed: false
   requested_bounds: { home: number; discover: number }
+  feed_results?: {
+    home: QuenchFeedCaptureResult
+    discover: QuenchFeedCaptureResult
+  }
   observations: QuenchObservation[]
 }
 
-export function assertExactCaptureSamples(
-  home: Pick<FeedSample, 'items'>,
-  discover: Pick<FeedSample, 'items'>,
+export type QuenchFeedCaptureResult = {
+  actual_count: number
+  terminal_condition: 'normal_exhaustion' | 'requested_bound_reached'
+  minimum_useful_sample: number
+  empirical_power: 'adequate' | 'underpowered'
+}
+
+export function assessBoundedPrefixSamples(
+  home: Pick<FeedSample, 'items' | 'sample_complete' | 'source_exhausted'>,
+  discover: Pick<FeedSample, 'items' | 'sample_complete' | 'source_exhausted'>,
   bound: number,
+  minimumUsefulSample = 100,
 ) {
-  if (home.items.length !== bound || discover.items.length !== bound) {
-    throw new Error('bounded Quench capture is incomplete; no coherent result may be retained')
+  if (!Number.isSafeInteger(bound) || bound < 1 || !Number.isSafeInteger(minimumUsefulSample)
+      || minimumUsefulSample < 1 || minimumUsefulSample > bound) {
+    throw new Error('bounded Quench capture limits are invalid')
   }
+  const assess = (sample: typeof home): QuenchFeedCaptureResult => {
+    if (!sample.sample_complete || sample.items.length > bound) {
+      throw new Error('bounded Quench capture is incomplete; no coherent result may be retained')
+    }
+    if (sample.items.length < bound && !sample.source_exhausted) {
+      throw new Error('bounded Quench capture has ambiguous pagination; no coherent result may be retained')
+    }
+    return {
+      actual_count: sample.items.length,
+      terminal_condition: sample.items.length === bound ? 'requested_bound_reached' : 'normal_exhaustion',
+      minimum_useful_sample: minimumUsefulSample,
+      empirical_power: sample.items.length >= minimumUsefulSample ? 'adequate' : 'underpowered',
+    }
+  }
+  return { home: assess(home), discover: assess(discover) }
 }
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -177,6 +205,22 @@ export function assertBodyFreeCapture(value: unknown): asserts value is QuenchCa
     }
     if (item.lineage_status === 'indeterminate' && !item.reason_indeterminate) {
       throw new Error('indeterminate lineage is missing its reason')
+    }
+  }
+  if (capture.feed_results) {
+    for (const feed of ['home', 'discover'] as const) {
+      const result = capture.feed_results[feed]
+      const actual = capture.observations.filter(item => item.feed === feed).length
+      const bound = capture.requested_bounds[feed]
+      if (!result || result.actual_count !== actual
+          || !Number.isSafeInteger(bound) || bound < 1 || actual > bound
+          || !Number.isSafeInteger(result.minimum_useful_sample)
+          || result.minimum_useful_sample < 1 || result.minimum_useful_sample > bound
+          || !['normal_exhaustion', 'requested_bound_reached'].includes(result.terminal_condition)
+          || result.terminal_condition !== (actual === bound ? 'requested_bound_reached' : 'normal_exhaustion')
+          || result.empirical_power !== (actual >= result.minimum_useful_sample ? 'adequate' : 'underpowered')) {
+        throw new Error('capture feed result does not match retained observations')
+      }
     }
   }
   const serialized = JSON.stringify(capture).toLowerCase()

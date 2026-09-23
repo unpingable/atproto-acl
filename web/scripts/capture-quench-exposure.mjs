@@ -3,8 +3,8 @@ import { AppDb } from '../dist/db.js'
 import { OAuthAccounts } from '../dist/oauth.js'
 import {
   QUENCH_CAPTURE_SCHEMA,
+  assessBoundedPrefixSamples,
   assertBodyFreeCapture,
-  assertExactCaptureSamples,
   sanitizeFeedSample,
 } from '../dist/quench-observation.js'
 
@@ -56,7 +56,7 @@ const homeAt = new Date().toISOString()
 const home = await acquire({ type: 'timeline' }, homeAt)
 const discoverAt = new Date().toISOString()
 const discover = await acquire({ type: 'feed', uri: discoverUri }, discoverAt)
-assertExactCaptureSamples(home, discover, bound)
+const feedResults = assessBoundedPrefixSamples(home, discover, bound, 100)
 const capture = {
   schema: QUENCH_CAPTURE_SCHEMA,
   capture_started_at: started,
@@ -64,6 +64,7 @@ const capture = {
   auth_mechanism: 'existing_atproto_oauth_read_session',
   writes_performed: false,
   requested_bounds: { home: bound, discover: bound },
+  feed_results: feedResults,
   observations: [
     ...sanitizeFeedSample('home', home, homeAt),
     ...sanitizeFeedSample('discover', discover, discoverAt),

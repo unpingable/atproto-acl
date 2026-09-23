@@ -19,6 +19,7 @@ const receipt = {
     home: capture.observations.filter(item => item.feed === 'home').length,
     discover: capture.observations.filter(item => item.feed === 'discover').length,
   },
+  feed_results: capture.feed_results ?? null,
   determinate_lineage_counts: {
     home: analysis.home.determinate_exposures,
     discover: analysis.discover.determinate_exposures,

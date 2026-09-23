@@ -44,6 +44,24 @@ OAuth credential custody required to preserve a rotated read grant. It makes at
 most one bounded Home and one bounded Discover acquisition. Credentials are
 used only in process and never enter the capture or its diagnostics.
 
+The capture retains the coherent ordered prefix available from each feed, up
+to the configured bound (at most 500 items). Home and Discover need not contain
+the same number of observations. A prefix is coherent only when acquisition
+either reaches the requested bound or terminates normally without a continuation
+cursor, and every retained observation passes extraction and privacy validation.
+Authentication or transport failure, repeated or otherwise ambiguous pagination,
+malformed response data, incomplete serialization, and privacy violations refuse
+the whole capture. Samples are never padded, resampled, or trimmed merely to
+equalize the feeds.
+
+The qualification receipt records each feed's actual count and terminal
+condition. A feed with fewer than 100 observations is retained when it exhausted
+normally, but its empirical conclusion is explicitly `underpowered`. The other
+feed can still support a separately denominated conclusion. A preceding
+count-only diagnostic may retain only request bound, count, page count, final
+cursor presence, terminal condition, and timestamps; it must not retain any
+post, actor, lineage, response-content, header, or credential field.
+
 Analysis removes exact duplicate observation IDs deterministically. Home and
 Discover retain their own order. The combined view is explicitly ordered as the
 Home capture followed by the Discover capture; it is not a claim about a single
