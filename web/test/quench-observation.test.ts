@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { analyzeCapture, analyzeQuenchObservations, assertBodyFreeCapture, sanitizeFeedSample } from '../src/quench-observation.js'
+import {
+  analyzeCapture,
+  analyzeQuenchObservations,
+  assertBodyFreeCapture,
+  assertExactCaptureSamples,
+  sanitizeFeedSample,
+} from '../src/quench-observation.js'
 
 const root = 'at://did:plc:root/app.bsky.feed.post/root'
 const other = 'at://did:plc:bob/app.bsky.feed.post/other'
@@ -92,4 +98,11 @@ test('capture validation refuses credential and content-bearing fields', () => {
   assert.throws(() => assertBodyFreeCapture({ ...base, observations: [{ ...observation, text: 'not retained' }] }),
     /non-allowlisted/)
   assert.throws(() => assertBodyFreeCapture({ ...base, authorization: 'synthetic-canary' }), /forbidden field/)
+})
+
+test('coherent capture requires the exact bound on both feed samples', () => {
+  const sample = (count: number) => ({ items: Array.from({ length: count }, (_, position) => ({ position })) as any[] })
+  assert.doesNotThrow(() => assertExactCaptureSamples(sample(500), sample(500), 500))
+  assert.throws(() => assertExactCaptureSamples(sample(499), sample(500), 500), /incomplete/)
+  assert.throws(() => assertExactCaptureSamples(sample(500), sample(499), 500), /incomplete/)
 })

@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import { AppDb } from '../dist/db.js'
 import { OAuthAccounts } from '../dist/oauth.js'
-import { QUENCH_CAPTURE_SCHEMA, assertBodyFreeCapture, sanitizeFeedSample } from '../dist/quench-observation.js'
+import {
+  QUENCH_CAPTURE_SCHEMA,
+  assertBodyFreeCapture,
+  assertExactCaptureSamples,
+  sanitizeFeedSample,
+} from '../dist/quench-observation.js'
 
 const required = name => {
   const value = process.env[name]
@@ -51,6 +56,7 @@ const homeAt = new Date().toISOString()
 const home = await acquire({ type: 'timeline' }, homeAt)
 const discoverAt = new Date().toISOString()
 const discover = await acquire({ type: 'feed', uri: discoverUri }, discoverAt)
+assertExactCaptureSamples(home, discover, bound)
 const capture = {
   schema: QUENCH_CAPTURE_SCHEMA,
   capture_started_at: started,

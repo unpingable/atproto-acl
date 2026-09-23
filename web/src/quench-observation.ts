@@ -28,6 +28,16 @@ export type QuenchCapture = {
   observations: QuenchObservation[]
 }
 
+export function assertExactCaptureSamples(
+  home: Pick<FeedSample, 'items'>,
+  discover: Pick<FeedSample, 'items'>,
+  bound: number,
+) {
+  if (home.items.length !== bound || discover.items.length !== bound) {
+    throw new Error('bounded Quench capture is incomplete; no coherent result may be retained')
+  }
+}
+
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
 export function sanitizeFeedSample(

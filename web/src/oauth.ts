@@ -13,6 +13,7 @@ import type { Config } from './config.js'
 
 const BSKY_APPVIEW_AUD = 'did:web:api.bsky.app%23bsky_appview'
 const rpcScope = (method: string) => `rpc?lxm=${method}&aud=${BSKY_APPVIEW_AUD}`
+const FEED_SKELETON_SCOPE = `rpc:app.bsky.feed.getFeedSkeleton?aud=${BSKY_APPVIEW_AUD}`
 
 export const READ_OAUTH_SCOPE = [
   'atproto',
@@ -22,6 +23,7 @@ export const READ_OAUTH_SCOPE = [
   rpcScope('app.bsky.graph.getFollows'),
   rpcScope('app.bsky.feed.getTimeline'),
   rpcScope('app.bsky.feed.getFeed'),
+  FEED_SKELETON_SCOPE,
   rpcScope('app.bsky.graph.getRelationships'),
 ].join(' ')
 
@@ -45,7 +47,7 @@ export function hasRpcPermission(scopes: string[], method: string) {
 export function requiredFeedMethods(source: FeedSource) {
   return source.type === 'timeline'
     ? ['app.bsky.feed.getTimeline'] as const
-    : ['app.bsky.feed.getFeed'] as const
+    : ['app.bsky.feed.getFeed', 'app.bsky.feed.getFeedSkeleton'] as const
 }
 
 export function observationRequestPlan(remainingRequests: number, profileBatches: number) {
