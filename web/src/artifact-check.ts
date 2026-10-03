@@ -67,6 +67,39 @@ const preview = await service.preview(did, policyId, undefined, '2026-09-10T01:0
 assert.equal(preview.receipt.rows.find(row => row.subject === 'did:plc:subject')?.action, 'mute')
 assert.deepEqual(await engine.overrides(did), { exempt: [], allow: [], keep_muted: [] })
 
+// Exercise the packaged bridge with the hosted structural-lineage contract too.
+// Quenching a thread must leave the same actor's other thread alone and must
+// never turn unknown lineage into an actor action or an approved write.
+const root = 'at://did:plc:subject/app.bsky.feed.post/root'
+const quenchService = new AclService(db, engine, accounts, () => ({
+  subjects: ['did:plc:subject'], identities: { [did]: did },
+  observations: [], coverage: [],
+  discovery: [{ source: 'feed_exposure', surface: 'timeline', complete: true,
+    exposure_complete: true, subjects: ['did:plc:subject'], exposures: [], items: [
+      { position: 0, post_uri: 'at://did:plc:subject/app.bsky.feed.post/reply',
+        post_cid: 'cid-reply', author_did: 'did:plc:subject', root_uri: root,
+        lineage_uri: root, lineage_status: 'reply' },
+      { position: 1, post_uri: 'at://did:plc:subject/app.bsky.feed.post/elsewhere',
+        post_cid: 'cid-elsewhere', author_did: 'did:plc:subject',
+        root_uri: 'at://did:plc:subject/app.bsky.feed.post/elsewhere',
+        lineage_uri: 'at://did:plc:subject/app.bsky.feed.post/elsewhere', lineage_status: 'root' },
+      { position: 2, post_uri: 'at://did:plc:subject/app.bsky.feed.post/unknown',
+        post_cid: 'cid-unknown', author_did: 'did:plc:subject', lineage_status: 'unknown' },
+    ] }],
+  remote: { 'did:plc:subject': { known: true, direct: false, muted: false } },
+}))
+const quenchPolicy = policy
+  .replace('  - type: explicit_dids\n    dids: [did:plc:subject]',
+    '  - type: feed_exposure\n    surface: timeline\n    limit: 10\n    followed: review')
+  .replace('keep_muted: []', `keep_muted: []\nattention:\n  suppress_lineages:\n    - ${root}`)
+const quenchId = quenchService.savePolicy(did, 'Fresh artifact thread policy', quenchPolicy)
+const quenchPreview = await quenchService.preview(did, quenchId, undefined, '2026-09-10T01:00:00Z')
+assert.deepEqual(quenchPreview.receipt.lineage_rows?.map(row => row.outcome), ['suppress', 'allow', 'indeterminate'])
+assert(quenchPreview.receipt.lineage_rows?.every(row => row.effect === 'local_feed_preview_only'))
+assert(quenchPreview.receipt.rows.every(row => row.action !== 'mute'))
+assert.equal((db.sql.prepare('SELECT count(*) count FROM approvals').get() as { count: number }).count, 0)
+assert.equal((db.sql.prepare('SELECT count(*) count FROM jobs').get() as { count: number }).count, 0)
+
 const brokenConfig = { ...config, dataDir: mkdtempSync(join(tmpdir(), 'atproto-acl-broken-')), python: '/missing/release/venv/bin/python' }
 const brokenDb = new AppDb(join(brokenConfig.dataDir, 'app.db'))
 const brokenEngine = new Engine(brokenConfig)

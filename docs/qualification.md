@@ -28,6 +28,13 @@ and separation from actor actions. No retained privacy-safe live feed snapshot
 with reply roots was available, so repeated-lineage prevalence in Home or
 Discover and client-side enforcement remain unqualified.
 
+The immutable candidate check also runs a fresh synthetic account through the
+packaged Python bridge and hosted preview service. It checks exact-root
+suppression, the same actor in an unrelated thread, unknown lineage refusal,
+and absence of actor mutes, approvals, or write jobs from the Quench decision.
+It uses no account credentials. This artifact check complements the browser
+journeys; it does not establish live OAuth or external feed interoperability.
+
 ## Live claims
 
 A release may be described as live-qualified only when its private acceptance
