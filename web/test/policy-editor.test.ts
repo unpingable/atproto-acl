@@ -46,6 +46,10 @@ test('guided policy refuses unsupported advanced features', () => {
   const model = readGuidedPolicy(body)
   assert.equal(model.supported, false)
   assert.match(model.reason ?? '', /advanced inline overrides/)
+
+  const lineage = readGuidedPolicy(body.replace('keep_muted: [did:plc:manual]', `keep_muted: []\nattention:\n  suppress_lineages:\n    - at://did:plc:alice/app.bsky.feed.post/root`))
+  assert.equal(lineage.supported, false)
+  assert.match(lineage.reason ?? '', /thread-lineage rules/)
 })
 
 test('guided policy requires at least one publisher-defined condition', () => {

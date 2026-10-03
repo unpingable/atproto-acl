@@ -105,6 +105,38 @@ def test_feed_follow_review_keeps_allow_and_exemption_precedence(store):
     assert exempt["action"] == "none"
 
 
+def test_lineage_preview_is_separate_from_actor_actions_and_binds_receipt(store):
+    root = "at://did:plc:root/app.bsky.feed.post/thread"
+    cfg = config([rule("q", "quarantine")])
+    cfg["attention"] = {"suppress_lineages": [root]}
+    cfg["sources"] = [{"type": "feed_exposure", "surface": "timeline"}]
+    discovery = [{"source": "feed_exposure", "surface": "timeline", "subjects": [DID],
+                  "complete": True, "exposure_complete": True, "items": [{
+                      "post_uri": "at://did:plc:alice/app.bsky.feed.post/reply",
+                      "post_cid": "cid-reply", "author_did": DID,
+                      "lineage_uri": root, "lineage_status": "reply",
+                  }]}]
+    receipt = proposal(store, remote={**OPEN, "relationship": "not_following"},
+                       policy=compile_policy(json.dumps(cfg)), discovery=discovery)
+    assert receipt["lineage_rows"][0]["action"] == "suppress"
+    assert receipt["lineage_rows"][0]["effect"] == "local_feed_preview_only"
+    assert receipt["rows"][0]["action"] == "mute", "lineage policy does not rewrite actor evaluation"
+    assert receipt["decision_context"]["lineage_rows"] == receipt["lineage_rows"]
+
+    discovery[0]["items"][0].pop("lineage_uri")
+    discovery[0]["items"][0]["lineage_status"] = "unknown"
+    unknown = proposal(store, remote={**OPEN, "relationship": "not_following"},
+                       policy=compile_policy(json.dumps(cfg)), discovery=discovery)
+    assert unknown["lineage_rows"][0]["action"] == "none"
+    assert unknown["completeness"]["lineage"] is False
+    assert "lineage" in unknown["incomplete_reasons"]
+
+    cfg.pop("attention")
+    removed = proposal(store, remote={**OPEN, "relationship": "not_following"},
+                       policy=compile_policy(json.dumps(cfg)), discovery=discovery)
+    assert removed["lineage_rows"] == []
+
+
 def test_historical_authorship_is_not_current_ownership(store):
     adapter = FakeAdapter()
     with store.lock():

@@ -23,6 +23,13 @@ Evidence includes publisher, subject, property/value, observation/expiry times,
 stable digest, provider-specific identifier, original evidence, retrieval time,
 and endpoint provenance. Raw credentials are never retained.
 
+When `attention.suppress_lineages` is configured, `lineage_rows` separately
+records the sampled post URI/CID, author, surface, declared lineage standing,
+exact rule, outcome, action, and explanation. These rows are bound into the
+decision-context hash. Their `suppress` action describes a local feed-preview
+decision only and never enters the actor-mute execution journal. Any
+indeterminate lineage makes `completeness.lineage` false.
+
 Per-subject rows separate `evaluation.outcome` from `desired`, and include
 `observed`, `action`, `reason`, `ownership`, `manual_review_required`, matched and
 unresolved rules, disagreements, and applicable overrides. A fingerprint binds

@@ -1,20 +1,19 @@
 import { Agent } from '@atproto/api'
 import {
   NodeOAuthClient,
-  type NodeSavedSession,
   type NodeSavedState,
-  type RuntimeLock,
 } from '@atproto/oauth-client-node'
 import { JoseKey } from '@atproto/jwk-jose'
 import { readFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
 import { AppDb } from './db.js'
+import { DurableOAuthSessionCustody } from './oauth-custody.js'
 import { acquireRelationships, sampleFeed, type ProgressReporter } from './feed-exposure.js'
 import type { AccountClient, AccountProvider, FeedSource, RemoteState } from './types.js'
 import type { Config } from './config.js'
 
 const BSKY_APPVIEW_AUD = 'did:web:api.bsky.app%23bsky_appview'
 const rpcScope = (method: string) => `rpc?lxm=${method}&aud=${BSKY_APPVIEW_AUD}`
+const FEED_SKELETON_SCOPE = `rpc:app.bsky.feed.getFeedSkeleton?aud=${BSKY_APPVIEW_AUD}`
 
 export const READ_OAUTH_SCOPE = [
   'atproto',
@@ -24,6 +23,7 @@ export const READ_OAUTH_SCOPE = [
   rpcScope('app.bsky.graph.getFollows'),
   rpcScope('app.bsky.feed.getTimeline'),
   rpcScope('app.bsky.feed.getFeed'),
+  FEED_SKELETON_SCOPE,
   rpcScope('app.bsky.graph.getRelationships'),
 ].join(' ')
 
@@ -47,7 +47,7 @@ export function hasRpcPermission(scopes: string[], method: string) {
 export function requiredFeedMethods(source: FeedSource) {
   return source.type === 'timeline'
     ? ['app.bsky.feed.getTimeline'] as const
-    : ['app.bsky.feed.getFeed'] as const
+    : ['app.bsky.feed.getFeed', 'app.bsky.feed.getFeedSkeleton'] as const
 }
 
 export function observationRequestPlan(remainingRequests: number, profileBatches: number) {
@@ -63,32 +63,11 @@ export function observationRequestPlan(remainingRequests: number, profileBatches
   }
 }
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-function sqliteLock(db: AppDb): RuntimeLock {
-  return async <T>(key: string, fn: () => T | PromiseLike<T>): Promise<T> => {
-    const owner = randomUUID()
-    const deadline = Date.now() + 15_000
-    while (true) {
-      const acquired = db.transaction(() => {
-        db.sql.prepare('DELETE FROM oauth_locks WHERE expires_at<=?').run(new Date().toISOString())
-        return db.sql.prepare('INSERT OR IGNORE INTO oauth_locks VALUES(?,?,?)')
-          .run(key, owner, new Date(Date.now() + 45_000).toISOString()).changes === 1
-      })
-      if (acquired) break
-      if (Date.now() >= deadline) throw new Error('account session is busy; retry shortly')
-      await delay(50 + Math.floor(Math.random() * 100))
-    }
-    try { return await fn() }
-    finally { db.sql.prepare('DELETE FROM oauth_locks WHERE key=? AND owner=?').run(key, owner) }
-  }
-}
-
 export class OAuthAccounts implements AccountProvider {
   readonly oauth: NodeOAuthClient
   readonly db: AppDb
 
-  private constructor(oauth: NodeOAuthClient, db: AppDb) {
+  private constructor(oauth: NodeOAuthClient, db: AppDb, private custody: DurableOAuthSessionCustody) {
     this.oauth = oauth
     this.db = db
   }
@@ -98,7 +77,9 @@ export class OAuthAccounts implements AccountProvider {
     const imported = JSON.parse(await readFile(config.oauthKeyFile, 'utf8')) as Parameters<typeof JoseKey.fromImportable>[0]
     const key = await JoseKey.fromImportable(imported, 'atproto-acl-2026-01')
     const clientId = config.origin + '/oauth-client-metadata.json'
+    const custody = new DurableOAuthSessionCustody(db)
     const oauth = new NodeOAuthClient({
+      fetch: custody.fetch,
       clientMetadata: {
         client_id: clientId,
         client_name: 'atproto-acl',
@@ -130,21 +111,10 @@ export class OAuthAccounts implements AccountProvider {
         },
         del: async (k: string) => { db.sql.prepare('DELETE FROM oauth_state WHERE key=?').run(k) },
       },
-      sessionStore: {
-        set: async (did: string, value: NodeSavedSession) => {
-          db.sql.prepare('INSERT OR REPLACE INTO oauth_sessions VALUES(?,?,?)')
-            .run(did, JSON.stringify(value), new Date().toISOString())
-        },
-        get: async (did: string) => {
-          const row = db.sql.prepare('SELECT value FROM oauth_sessions WHERE did=?')
-            .get(did) as { value: string } | undefined
-          return row ? JSON.parse(row.value) as NodeSavedSession : undefined
-        },
-        del: async (did: string) => { db.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did) },
-      },
-      requestLock: sqliteLock(db),
+      sessionStore: custody.sessionStore,
+      requestLock: custody.requestLock,
     })
-    return new OAuthAccounts(oauth, db)
+    return new OAuthAccounts(oauth, db, custody)
   }
 
   async authorize(handle: string, state: string, writeAccess = false) {
@@ -153,6 +123,10 @@ export class OAuthAccounts implements AccountProvider {
 
   async callback(params: URLSearchParams) {
     return this.oauth.callback(params)
+  }
+
+  async clearSession(did: string) {
+    await this.custody.sessionStore.del(did)
   }
 
   async restore(did: string): Promise<AccountClient> {

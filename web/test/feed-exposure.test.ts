@@ -12,13 +12,14 @@ import { hasRpcPermission, OAUTH_SCOPE, observationRequestPlan, requiredFeedMeth
 
 const profile = (did: string, handle = `${did.slice(8)}.test`) => ({ did, handle })
 
-test('generator acquisition requires only the hydrated feed RPC that it calls', () => {
+test('generator acquisition binds both the hydrated feed RPC and its server-advertised skeleton scope', () => {
   assert.deepEqual(requiredFeedMethods({ type: 'timeline' }), ['app.bsky.feed.getTimeline'])
   assert.deepEqual(requiredFeedMethods({
     type: 'feed', uri: 'at://did:plc:feed/app.bsky.feed.generator/exact',
-  }), ['app.bsky.feed.getFeed'])
+  }), ['app.bsky.feed.getFeed', 'app.bsky.feed.getFeedSkeleton'])
   assert.match(OAUTH_SCOPE, /rpc\?lxm=app\.bsky\.feed\.getFeed&aud=did:web:api\.bsky\.app%23bsky_appview/)
-  assert.doesNotMatch(OAUTH_SCOPE, /getFeedSkeleton|muteActor|unmuteActor/)
+  assert.match(OAUTH_SCOPE, /rpc:app\.bsky\.feed\.getFeedSkeleton\?aud=did:web:api\.bsky\.app%23bsky_appview/)
+  assert.doesNotMatch(OAUTH_SCOPE, /muteActor|unmuteActor/)
   assert.equal(hasRpcPermission(WRITE_OAUTH_SCOPE.split(' '), 'app.bsky.graph.muteActor'), true)
   assert.equal(hasRpcPermission(WRITE_OAUTH_SCOPE.split(' '), 'app.bsky.graph.unmuteActor'), true)
   assert.equal(hasRpcPermission([
@@ -104,9 +105,47 @@ test('extracts ordered feed summaries and bounded quote/repost provenance withou
   assert.equal(result.exposures[2]?.introducer_did, 'did:plc:bob')
   assert.equal(result.exposures[2]?.acquired_at, '2026-09-09T12:01:00Z')
   assert.equal(result.exposure_complete, true)
+  assert.equal(result.items[0]?.lineage_status, 'root')
+  assert.equal(result.items[0]?.lineage_uri, 'at://did:plc:alice/app.bsky.feed.post/a')
   const serialized = JSON.stringify(result)
   assert.equal(serialized.includes('must never'), false)
   assert.equal(serialized.includes('feedContext'), false)
+})
+
+test('extracts authoritative reply roots without crawling and refuses ambiguous lineage', () => {
+  const root = 'at://did:plc:root/app.bsky.feed.post/root'
+  const parent = 'at://did:plc:parent/app.bsky.feed.post/parent'
+  const reply = post('did:plc:bob', 'reply')
+  reply.post.record = { $type: 'app.bsky.feed.post', text: 'not retained', reply: {
+    root: { uri: root, cid: 'cid-root' }, parent: { uri: parent, cid: 'cid-parent' },
+  }}
+  reply.reply = {
+    root: { $type: 'app.bsky.feed.defs#notFoundPost', uri: root, notFound: true },
+    parent: { $type: 'app.bsky.feed.defs#blockedPost', uri: parent, blocked: true },
+  }
+  reply.reason = {
+    $type: 'app.bsky.feed.defs#reasonRepost', by: profile('did:plc:introducer'),
+    indexedAt: '2026-09-09T12:00:00Z',
+  }
+  const missing = post('did:plc:carol', 'missing')
+  missing.post.record = { $type: 'app.bsky.feed.post', text: 'not retained', reply: {
+    parent: { uri: parent, cid: 'cid-parent' },
+  }}
+  const conflict = post('did:plc:dana', 'conflict')
+  conflict.post.record = { $type: 'app.bsky.feed.post', text: 'not retained', reply: {
+    root: { uri: root, cid: 'cid-root' }, parent: { uri: parent, cid: 'cid-parent' },
+  }}
+  conflict.reply = { root: { uri: 'at://did:plc:other/app.bsky.feed.post/root' }, parent: { uri: parent } }
+
+  const result = extractFeedExposures({ type: 'timeline' }, [reply, missing, conflict], '2026-09-09T12:01:00Z')
+  assert.deepEqual(result.items.map(item => [item.lineage_status, item.lineage_uri, item.parent_uri]), [
+    ['reply', root, parent],
+    ['unknown', undefined, parent],
+    ['conflict', undefined, undefined],
+  ])
+  assert.equal(result.exposures[0]?.lineage_uri, root)
+  assert.equal(result.exposures[0]?.mechanism, 'repost', 'a reposted reply retains the target reply lineage')
+  assert.equal(JSON.stringify(result).includes('not retained'), false)
 })
 
 test('marks quote extraction incomplete at the depth and occurrence bounds', () => {

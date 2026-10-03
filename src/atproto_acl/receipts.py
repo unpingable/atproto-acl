@@ -43,6 +43,10 @@ def set_completeness(receipt, execution_complete=True):
                             for r in rows),
         "execution": execution_complete,
     }
+    if receipt["policy"].get("attention") is not None:
+        components["lineage"] = all(
+            row["outcome"] != "indeterminate" for row in receipt.get("lineage_rows", ())
+        )
     receipt["completeness"] = components
     receipt["complete"] = all(components.values())
     receipt["incomplete_reasons"] = [k for k, complete in components.items() if not complete]
@@ -72,6 +76,8 @@ def add_context(receipt, policy, overrides, ledgers):
         "ledger": {r["subject"]: ledgers.get(r["subject"], {}) for r in receipt["rows"]},
         "history": {r["subject"]: r["previous_quarantine_receipt"] for r in receipt["rows"]},
     }
+    if receipt["policy"].get("attention") is not None:
+        context["lineage_rows"] = receipt.get("lineage_rows", [])
     receipt.update(policy_source_hash=policy.source_hash,
                    effective_configuration=configuration,
                    effective_config_hash=context["effective_config_hash"],

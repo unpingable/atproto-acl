@@ -16,6 +16,11 @@ class PolicyError(ValueError):
     pass
 
 
+POST_AT_URI = re.compile(
+    r"at://did:(?:plc|web):[^/\s]+/app\.bsky\.feed\.post/[A-Za-z0-9._~:-]+"
+)
+
+
 class UniqueLoader(yaml.SafeLoader):
     pass
 
@@ -99,7 +104,7 @@ def compile_policy(text: str) -> CompiledPolicy:
         raise PolicyError("policy document must be UTF-8 text no larger than 256 KiB")
     try:
         config = yaml.load(text, Loader=UniqueLoader)
-        _keys(config, ["version", "account", "providers", "sources", "rules", "exempt", "allow", "keep_muted"],
+        _keys(config, ["version", "account", "providers", "sources", "rules", "exempt", "allow", "keep_muted", "attention"],
               ["version", "account", "providers", "sources", "rules"])
         if type(config["version"]) is not int or config["version"] != 1 or not isinstance(config["account"], str) or not config["account"]:
             raise PolicyError("version must be 1 and account must be an identifier")
@@ -179,6 +184,18 @@ def compile_policy(text: str) -> CompiledPolicy:
             values = config.setdefault(layer, [])
             if not isinstance(values, list) or any(not isinstance(x, str) or not x for x in values):
                 raise PolicyError(f"{layer} must be a list of DIDs or handles")
+        attention = config.get("attention")
+        if attention is not None:
+            _keys(attention, ["suppress_lineages"], ["suppress_lineages"])
+            lineages = attention["suppress_lineages"]
+            if (not isinstance(lineages, list) or not lineages or len(lineages) > 1000 or
+                    any(not isinstance(uri, str) or not POST_AT_URI.fullmatch(uri) for uri in lineages)):
+                raise PolicyError("attention suppress_lineages must contain 1 to 1000 exact post AT URIs")
+            if len(set(lineages)) != len(lineages):
+                raise PolicyError("attention suppress_lineages must not contain duplicates")
+            if not any(source["type"] == "feed_exposure" for source in config["sources"]):
+                raise PolicyError("attention suppress_lineages requires a feed_exposure source")
+            attention["suppress_lineages"] = sorted(lineages)
         config["rules"].sort(key=lambda x: x["name"])
         return CompiledPolicy(canonical(config), digest(config), hashlib.sha256(text.encode("utf-8")).hexdigest())
     except yaml.MarkedYAMLError as exc:
@@ -188,6 +205,47 @@ def compile_policy(text: str) -> CompiledPolicy:
         raise PolicyError(f"invalid YAML{where}: {problem}") from exc
     except (TypeError, KeyError, AttributeError, RecursionError, yaml.YAMLError) as exc:
         raise PolicyError(f"invalid policy: {type(exc).__name__}") from exc
+
+
+def evaluate_lineages(policy: CompiledPolicy, discovery: list[dict]) -> list[dict]:
+    """Evaluate exact feed-item lineage without producing actor-level actions."""
+    configured = set(policy.config.get("attention", {}).get("suppress_lineages", ()))
+    if not configured:
+        return []
+    decisions = []
+    for source in discovery:
+        if source.get("source") != "feed_exposure":
+            continue
+        surface = source.get("surface")
+        for item in source.get("items", ()):
+            if not isinstance(item, dict):
+                continue
+            post_uri = item.get("post_uri")
+            status = item.get("lineage_status", "unknown")
+            lineage = item.get("lineage_uri")
+            common = {
+                "post_uri": post_uri,
+                "post_cid": item.get("post_cid"),
+                "author_did": item.get("author_did"),
+                "surface": surface,
+                "lineage_uri": lineage,
+                "lineage_status": status,
+                "effect": "local_feed_preview_only",
+            }
+            if status not in ("root", "reply") or not isinstance(lineage, str):
+                decisions.append({**common, "outcome": "indeterminate", "action": "none",
+                                  "reason_code": "lineage_unavailable",
+                                  "reason": "Lineage could not be established from the captured feed item."})
+            elif lineage in configured:
+                decisions.append({**common, "outcome": "suppress", "action": "suppress",
+                                  "reason_code": "suppressed_by_exact_lineage",
+                                  "rule": {"type": "suppress_lineage", "root_uri": lineage},
+                                  "reason": f"Suppressed because thread root {lineage} is in your quenched lineages."})
+            else:
+                decisions.append({**common, "outcome": "allow", "action": "none",
+                                  "reason_code": "no_matching_lineage_rule",
+                                  "reason": "No exact lineage suppression rule matched this item."})
+    return decisions
 
 
 def _leaf(node, providers, evidence, subject, now, negative=False, require_current=False, ignore_expiry=False):

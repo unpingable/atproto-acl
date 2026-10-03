@@ -20,6 +20,21 @@ Fixture tests use synthetic identities and block network access. They do not pro
 interoperability with a real authorization server, PDS, AppView, feed generator,
 or label publisher.
 
+The exact-lineage Quench tranche is fixture-qualified through the real hosted
+feed-exposure extractor and policy/receipt/preview path. It covers roots,
+replies, reposted replies, multiple actors in one lineage, the same actor in an
+unrelated lineage, missing/malformed/conflicting roots, portable round trips,
+and separation from actor actions. No retained privacy-safe live feed snapshot
+with reply roots was available, so repeated-lineage prevalence in Home or
+Discover and client-side enforcement remain unqualified.
+
+The immutable candidate check also runs a fresh synthetic account through the
+packaged Python bridge and hosted preview service. It checks exact-root
+suppression, the same actor in an unrelated thread, unknown lineage refusal,
+and absence of actor mutes, approvals, or write jobs from the Quench decision.
+It uses no account credentials. This artifact check complements the browser
+journeys; it does not establish live OAuth or external feed interoperability.
+
 ## Live claims
 
 A release may be described as live-qualified only when its private acceptance

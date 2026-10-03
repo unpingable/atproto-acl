@@ -67,6 +67,42 @@ function repostIntroducer(item: FeedViewPost) {
   return by
 }
 
+const POST_AT_URI = /^at:\/\/did:(?:plc|web):[^/\s]+\/app\.bsky\.feed\.post\/[A-Za-z0-9._~:-]+$/
+
+function uri(value: unknown) {
+  const candidate = record(value)?.uri
+  return typeof candidate === 'string' ? candidate : undefined
+}
+
+function lineage(item: FeedViewPost, postUri: string): Pick<FeedItemSummary,
+  'parent_uri' | 'root_uri' | 'lineage_uri' | 'lineage_status'> {
+  const rawReply = record(record(item.post?.record)?.reply)
+  const viewReply = record(item.reply)
+  if (!rawReply && !viewReply) {
+    return POST_AT_URI.test(postUri)
+      ? { root_uri: postUri, lineage_uri: postUri, lineage_status: 'root' }
+      : { lineage_status: 'malformed' }
+  }
+
+  const rawRoot = uri(rawReply?.root)
+  const viewRoot = uri(viewReply?.root)
+  const rawParent = uri(rawReply?.parent)
+  const viewParent = uri(viewReply?.parent)
+  const parents = [rawParent, viewParent].filter((value): value is string => value !== undefined)
+  if ([rawRoot, viewRoot, ...parents].some(value => value !== undefined && !POST_AT_URI.test(value))) {
+    return { lineage_status: 'malformed' }
+  }
+  if (new Set(parents).size > 1) return { lineage_status: 'conflict' }
+  const parent = parents.find(value => POST_AT_URI.test(value))
+  // The embedded post record is the authority when present. Hydration can add
+  // availability detail, but cannot repair or override a missing declared root.
+  if (rawReply && !rawRoot) return { parent_uri: parent, lineage_status: 'unknown' }
+  if (rawRoot && viewRoot && rawRoot !== viewRoot) return { lineage_status: 'conflict' }
+  const root = rawRoot ?? viewRoot
+  if (!root) return { parent_uri: parent, lineage_status: 'unknown' }
+  return { parent_uri: parent, root_uri: root, lineage_uri: root, lineage_status: 'reply' }
+}
+
 export function extractFeedExposures(
   source: FeedSource,
   items: FeedViewPost[],
@@ -158,6 +194,7 @@ export function extractFeedExposures(
       exposureComplete = false
       return
     }
+    const lineageState = lineage(item, uri)
     summaries.push({
       position,
       post_uri: uri,
@@ -166,6 +203,7 @@ export function extractFeedExposures(
       author_handle: top.handle,
       introducer_did: introducer?.did,
       introducer_handle: introducer?.handle,
+      ...lineageState,
     })
     add({
       surface,
@@ -179,6 +217,7 @@ export function extractFeedExposures(
       path: 'post.author',
       position,
       acquired_at: acquiredAt,
+      ...lineageState,
     })
     if (item.post.embed) {
       visitEmbed(item.post.embed, 'post.embed', 1, position, top, new WeakSet())

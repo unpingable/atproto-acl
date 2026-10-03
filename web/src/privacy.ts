@@ -155,6 +155,7 @@ export class PrivacyManager {
     this.app.transaction(() => {
       // Tables without a user foreign key must be removed explicitly. The rest
       // are deleted by the users ON DELETE CASCADE boundary.
+      this.app.sql.prepare('DELETE FROM oauth_refresh_intents WHERE did=?').run(did)
       this.app.sql.prepare('DELETE FROM oauth_sessions WHERE did=?').run(did)
       this.app.sql.prepare('DELETE FROM audit WHERE did=?').run(did)
       this.app.sql.prepare('DELETE FROM capacity_events WHERE did=?').run(did)
@@ -178,6 +179,7 @@ export class PrivacyManager {
     const candidateQueries = [
       'SELECT DISTINCT did FROM users WHERE did IS NOT NULL',
       'SELECT DISTINCT did FROM oauth_sessions WHERE did IS NOT NULL',
+      'SELECT DISTINCT did FROM oauth_refresh_intents WHERE did IS NOT NULL',
       'SELECT DISTINCT did FROM audit WHERE did IS NOT NULL',
       'SELECT DISTINCT did FROM account_deletions WHERE did IS NOT NULL',
       'SELECT DISTINCT did FROM admissions WHERE did IS NOT NULL',

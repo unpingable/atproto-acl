@@ -67,6 +67,23 @@ def test_bare_v1_remains_unambiguously_supported():
     assert runtime_account_rules(doc.account_rules) == {"exempt": set(), "allow": set(), "keep_muted": set()}
 
 
+def test_exact_lineage_rules_round_trip_and_change_portable_behavior_identity():
+    root = "at://did:plc:root/app.bsky.feed.post/thread"
+    with_lineage = POLICY.replace(
+        "  - type: explicit_dids\n    dids: [did:plc:subject]",
+        "  - type: feed_exposure\n    surface: timeline",
+    ) + f"attention:\n  suppress_lineages: [{root}]\n"
+    envelope = export_portable_document(
+        policy_source=with_lineage, policy_name="Quiet thread", policy_revision=1,
+        exporter_version="0.2.0", exported_at="2026-09-22T12:00:00+00:00",
+        account_rules={"leave_alone": [], "always_keep": [], "never_unmute": []},
+    )
+    parsed = parse_portable_document(envelope)
+    assert parsed.policy.config["attention"] == {"suppress_lineages": [root]}
+    without = parse_portable_document(POLICY)
+    assert parsed.portable_behavior_hash != without.portable_behavior_hash
+
+
 @pytest.mark.parametrize("old,new,error", [
     ("format_version: 1", "format_version: 2", "unsupported portable document version"),
     ("format: atproto-acl.portable-policy", "format: strange-format", "unsupported portable document format"),

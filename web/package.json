@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "worker": "node dist/worker-main.js",
     "ops": "node dist/ops.js",
+    "capture:quench": "node scripts/capture-quench-exposure.mjs",
     "test": "node --import tsx --test test/*.test.ts",
     "test:browser": "playwright test",
     "qualify:oauth-0.5.5": "sh scripts/qualify-oauth-0.5.5.sh",

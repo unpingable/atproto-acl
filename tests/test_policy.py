@@ -5,7 +5,7 @@ import json
 import pytest
 
 from atproto_acl.model import Coverage, EvidenceSet, Observation
-from atproto_acl.policy import PolicyError, compile_policy, evaluate
+from atproto_acl.policy import PolicyError, compile_policy, evaluate, evaluate_lineages
 
 NOW = "2026-09-08T12:00:00Z"
 DID = "did:plc:alice"
@@ -225,3 +225,50 @@ def test_feed_exposure_source_rejects_ambiguous_or_unbounded_forms(source):
     cfg["sources"] = [source]
     with pytest.raises(PolicyError):
         compile_policy(json.dumps(cfg))
+
+
+def test_exact_lineage_policy_is_additive_deterministic_and_strict():
+    root_a = "at://did:plc:alice/app.bsky.feed.post/root-a"
+    root_b = "at://did:plc:bob/app.bsky.feed.post/root-b"
+    cfg = config([rule("q", "quarantine")])
+    cfg["sources"] = [{"type": "feed_exposure", "surface": "timeline"}]
+    cfg["attention"] = {"suppress_lineages": [root_b, root_a]}
+    first = compile_policy(json.dumps(cfg))
+    assert first.config["attention"]["suppress_lineages"] == [root_a, root_b]
+    cfg["attention"]["suppress_lineages"] = [root_a, root_b]
+    assert compile_policy(json.dumps(cfg)).policy_hash == first.policy_hash
+
+    for invalid in ([], [root_a, root_a], ["https://example.test/post"],
+                    ["at://did:plc:alice/app.bsky.feed.generator/not-a-post"]):
+        cfg["attention"] = {"suppress_lineages": invalid}
+        with pytest.raises(PolicyError, match="suppress_lineages"):
+            compile_policy(json.dumps(cfg))
+
+
+def test_lineage_evaluation_suppresses_only_exact_thread_and_preserves_unknown():
+    root = "at://did:plc:alice/app.bsky.feed.post/root"
+    other = "at://did:plc:carol/app.bsky.feed.post/other"
+    cfg = config([rule("q", "quarantine")])
+    cfg["sources"] = [{"type": "feed_exposure", "surface": "timeline"}]
+    cfg["attention"] = {"suppress_lineages": [root]}
+    policy = compile_policy(json.dumps(cfg))
+    discovery = [{"source": "feed_exposure", "surface": "timeline", "items": [
+        {"post_uri": root, "post_cid": "cid-root", "author_did": "did:plc:alice",
+         "lineage_uri": root, "lineage_status": "root"},
+        {"post_uri": "at://did:plc:bob/app.bsky.feed.post/reply", "post_cid": "cid-reply",
+         "author_did": "did:plc:bob", "lineage_uri": root, "lineage_status": "reply"},
+        {"post_uri": "at://did:plc:carol/app.bsky.feed.post/deep-reply", "post_cid": "cid-deep",
+         "author_did": "did:plc:carol", "lineage_uri": root, "lineage_status": "reply"},
+        {"post_uri": other, "post_cid": "cid-other", "author_did": "did:plc:bob",
+         "lineage_uri": other, "lineage_status": "root"},
+        {"post_uri": "at://did:plc:dana/app.bsky.feed.post/unknown", "post_cid": "cid-unknown",
+         "author_did": "did:plc:dana", "lineage_status": "unknown"},
+    ]}]
+    decisions = evaluate_lineages(policy, discovery)
+    assert [row["outcome"] for row in decisions] == ["suppress", "suppress", "suppress", "allow", "indeterminate"]
+    assert decisions[1]["reason_code"] == "suppressed_by_exact_lineage"
+    assert decisions[1]["rule"] == {"type": "suppress_lineage", "root_uri": root}
+    assert decisions[2]["author_did"] == "did:plc:carol", "different actors in the same lineage are suppressed"
+    assert decisions[3]["author_did"] == "did:plc:bob", "the same actor remains eligible elsewhere"
+    assert decisions == evaluate_lineages(policy, discovery), "repeated evaluation is deterministic"
+    assert evaluate_lineages(compile_policy(json.dumps(config([rule("q", "quarantine")]))), discovery) == []

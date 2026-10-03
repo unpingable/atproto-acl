@@ -1,7 +1,8 @@
 # Policy reference (version 1)
 
 Required root fields: `version: 1`, `account`, `providers`, `sources`, and `rules`.
-Optional root fields: `exempt`, `allow`, `keep_muted` (lists of DIDs or handles).
+Optional root fields: `exempt`, `allow`, `keep_muted` (lists of DIDs or handles),
+and `attention` (the exact-lineage preview primitive described below).
 Unknown keys and duplicate YAML keys are errors.
 
 Provider aliases map to `{type: atproto_labels, did: ...}` or the narrowly
@@ -100,3 +101,10 @@ to four levels and sixteen authors per item. `followed: review` routes confirmed
 followed matches to a separate approval class. A missing or malformed relationship
 is unresolved and cannot propose a mute. The CLI refuses live `feed_exposure`
 because it does not implement this provenance adapter; hosted and fixture inputs do.
+
+An `attention.suppress_lineages` list may contain 1–1000 unique exact post AT
+URIs and requires a `feed_exposure` source. It evaluates sampled items by their
+declared root URI and produces separate item-level preview decisions. It does
+not change actor rules, create mute/block actions, infer topics, or enforce a
+filter in Bluesky. Missing, malformed, or contradictory lineage is
+indeterminate. See [the exact-lineage contract](design/quench-exact-lineage-v1.md).

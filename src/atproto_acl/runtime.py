@@ -9,7 +9,7 @@ from .adapters import PrivateMuteAdapter, plan_action
 from .labels import LabelProvider
 from .model import Coverage, EvidenceSet, Observation, digest, utcnow
 from .network import NetworkError, resolve
-from .policy import compile_policy, evaluate
+from .policy import compile_policy, evaluate, evaluate_lineages
 from .sources import Sources
 from .receipts import add_context, disposition_reasons, set_completeness
 from .store import StateError
@@ -105,6 +105,7 @@ def build_receipt(policy, store, subjects, evidence, discovery, overrides, remot
         row.update(disposition_reasons(row, decision, previous))
         rows.append(row)
     ids = {eid for row in rows for eid in row["evaluation"]["evidence_ids"]}
+    lineage_rows = evaluate_lineages(policy, discovery)
     receipt = {"schema": 1, "id": str(uuid4()), "account": store.account,
             "evidence_mode": store.evidence_mode,
             "policy_hash": policy.policy_hash, "policy": policy.config,
@@ -114,7 +115,7 @@ def build_receipt(policy, store, subjects, evidence, discovery, overrides, remot
             "discovery": discovery, "coverage": [asdict(c) for c in evidence.coverage],
             "identities": store.identities(),
             "evidence": [asdict(x) for x in evidence.observations if x.evidence_id in ids],
-            "rows": rows, "executions": []}
+            "rows": rows, "lineage_rows": lineage_rows, "executions": []}
     add_context(receipt, policy, overrides, ledgers)
     set_completeness(receipt)
     return receipt

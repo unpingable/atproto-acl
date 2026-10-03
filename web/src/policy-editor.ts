@@ -46,6 +46,9 @@ export function readGuidedPolicy(body: string): GuidedPolicy {
   })
   let value: Record<string, any>
   try { value = parse(body) as Record<string, any> } catch { return unsupported('Fix the YAML errors before returning to the guided editor.') }
+  if (value?.attention !== undefined) {
+    return unsupported('This policy contains exact thread-lineage rules. Continue in YAML so the guided editor cannot remove them.')
+  }
   const providers = value?.providers
   const bskySource = value?.sources?.[0]
   const bskyRule = value?.rules?.[0]

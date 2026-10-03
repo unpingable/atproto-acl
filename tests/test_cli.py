@@ -46,6 +46,18 @@ def test_html_report_escapes_evidence():
     assert "<script>" not in output and "&lt;script&gt;" in output
 
 
+def test_text_report_names_lineage_scope_without_actor_action():
+    root = "at://did:plc:alice/app.bsky.feed.post/root"
+    output = render({"mode": "preview", "account": "did:plc:viewer", "id": "receipt",
+                     "complete": True, "rows": [], "lineage_rows": [{
+                         "post_uri": "at://did:plc:bob/app.bsky.feed.post/reply",
+                         "outcome": "suppress", "action": "suppress",
+                         "reason": f"Suppressed because thread root {root} is in your quenched lineages.",
+                     }]}, "text")
+    assert "thread-lineage preview (local attention policy; no actor action)" in output
+    assert root in output
+
+
 def test_example_validates_without_network(capsys):
     assert main(["validate", "--policy", str(ROOT / "examples/poasters-quarantine.yaml")]) == 0
     assert '"valid": true' in capsys.readouterr().out
